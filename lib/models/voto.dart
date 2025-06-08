@@ -1,6 +1,6 @@
 class Voto {
   final String usuarioId;
-  final int puntuacion;
+  final double puntuacion;
   final String comentario;
 
   Voto({

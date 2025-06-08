@@ -1,11 +1,11 @@
-class Vino {
+class Cata {
   final String id;
   final String nombre;
   final String descripcion;
   final double precio;
   final String imagenUrl;
 
-  Vino({
+  Cata({
     required this.id,
     required this.nombre,
     required this.descripcion,
@@ -20,8 +20,8 @@ class Vino {
     'imagenUrl': imagenUrl,
   };
 
-  static Vino fromJson(String id, Map<String, dynamic> json) {
-    return Vino(
+  static Cata fromJson(String id, Map<String, dynamic> json) {
+    return Cata(
       id: id,
       nombre: json['nombre'],
       descripcion: json['descripcion'],

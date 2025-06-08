@@ -6,6 +6,7 @@ import 'package:wine_app/screens/login.dart';
 import 'package:wine_app/screens/votacion_detail.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/services/firestore_service.dart';
+import 'package:wine_app/utils/styles.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -16,12 +17,14 @@ class HomeScreen extends StatelessWidget {
     final firestore = Provider.of<FirestoreService>(context);
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Catas'),
+        title: const Text('Catas', style: TextStyle(color: textColor)),
         centerTitle: true,
-        backgroundColor: Colors.blue,
+        backgroundColor: primaryColor,
         actions: [
           IconButton(
+            color: textColor,
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await auth.signOut();
@@ -32,24 +35,25 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: FutureBuilder<List<Votacion>>(
-        future: firestore.fetchVotaciones(),
+      body: StreamBuilder<List<Votacion>>(
+        stream: firestore.streamCatas(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(child: Text('No hay votaciones aún.'));
+            return const Center(child: Text('No hay catas aún.'));
           }
 
-          final votaciones = snapshot.data!;
+          final catas = snapshot.data!;
           final ahora = DateTime.now();
 
           return ListView.builder(
-            itemCount: votaciones.length,
+            padding: const EdgeInsets.all(16),
+            itemCount: catas.length,
             itemBuilder: (context, index) {
-              final votacion = votaciones[index];
+              final votacion = catas[index];
               final fechaHoy = DateTime(ahora.year, ahora.month, ahora.day);
               final fechaVotacion = DateTime(
                 votacion.fecha.year,
@@ -59,15 +63,50 @@ class HomeScreen extends StatelessWidget {
               final esPasada = fechaVotacion.isBefore(fechaHoy);
 
               return Card(
-                color: esPasada ? Colors.yellow[100] : Colors.green[100],
+                elevation: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                color: esPasada ? Colors.grey[100] : Colors.white,
                 child: ListTile(
-                  title: Text(
-                    'Votación del ${votacion.fecha.toLocal().toString().split(' ')[0]}',
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 16,
                   ),
-                  subtitle: Text(votacion.nombre),
-                  // Text(
-                  //   esPasada ? 'Votación pasada' : 'Votación activa',
-                  // ),
+                  leading: CircleAvatar(
+                    backgroundColor: esPasada ? Colors.grey[400] : primaryColor,
+                    child: Icon(
+                      esPasada ? Icons.history : Icons.event_available,
+                      color: Colors.white,
+                    ),
+                  ),
+                  title: Text(
+                    votacion.nombre,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Text(
+                        'Fecha: ${votacion.fecha.toLocal().toString().split(' ')[0]}',
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        esPasada ? 'Votación finalizada' : 'Votación en curso',
+                        style: TextStyle(
+                          fontStyle: FontStyle.italic,
+                          color: esPasada ? Colors.red[400] : Colors.green[700],
+                        ),
+                      ),
+                    ],
+                  ),
                   onTap: () {
                     Navigator.push(
                       context,
@@ -84,12 +123,13 @@ class HomeScreen extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
+        backgroundColor: primaryColor,
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const CreateVotacionScreen()),
           );
         },
-        child: const Icon(Icons.add),
+        child: const Icon(Icons.add, color: textColor),
       ),
     );
   }

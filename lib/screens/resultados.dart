@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wine_app/models/voto.dart';
 import 'package:wine_app/services/firestore_service.dart';
+import 'package:wine_app/utils/styles.dart';
 
 class ResultadosScreen extends StatefulWidget {
   final String votacionId;
@@ -12,159 +13,193 @@ class ResultadosScreen extends StatefulWidget {
 }
 
 class _ResultadosScreenState extends State<ResultadosScreen> {
-  late Map<String, bool> mostrarNombres;
-
-  @override
-  void initState() {
-    super.initState();
-    mostrarNombres = {};
-  }
+  bool mostrarNombres = false;
+  bool ordenarPorMedia = false;
 
   @override
   Widget build(BuildContext context) {
     final firestore = Provider.of<FirestoreService>(context, listen: false);
 
     return Scaffold(
+      backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Resultados'),
+        title: const Text('Resultados', style: TextStyle(color: textColor)),
         centerTitle: true,
-        backgroundColor: Colors.blue,
+        backgroundColor: primaryColor,
+        foregroundColor: textColor,
+        actions: [
+          IconButton(
+            icon: Icon(
+              ordenarPorMedia ? Icons.sort_by_alpha : Icons.sort,
+              color: textColor,
+            ),
+            tooltip: 'Ordenar por media',
+            onPressed: () {
+              setState(() => ordenarPorMedia = !ordenarPorMedia);
+            },
+          ),
+        ],
       ),
       body:
           FutureBuilder<(Map<String, Map<String, Voto>>, Map<String, String>)>(
             future: firestore.fetchResultados(widget.votacionId),
             builder: (context, snapshot) {
-              if (!snapshot.hasData)
+              if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
+              }
 
-              final (data, nombresVino) = snapshot.data!;
-              final vinos = data.keys.toList();
+              final (data, nombresCata) = snapshot.data!;
+              final catas = data.keys.toList();
               final usuarios = <String>{};
               for (var votos in data.values) {
                 usuarios.addAll(votos.keys);
               }
 
-              for (var vinoId in vinos) {
-                mostrarNombres.putIfAbsent(vinoId, () => false);
-              }
-
               return FutureBuilder<Map<String, String>>(
                 future: firestore.fetchNombresUsuarios(usuarios),
                 builder: (context, userSnap) {
-                  if (!userSnap.hasData)
+                  if (!userSnap.hasData) {
                     return const Center(child: CircularProgressIndicator());
+                  }
+
                   final nombresUsuarios = userSnap.data!;
                   final usuarioList = usuarios.toList();
 
                   final medias = <String, double>{};
-                  for (var vinoId in vinos) {
-                    final votos = data[vinoId]!.values
+                  for (var cataId in catas) {
+                    final votos = data[cataId]!.values
                         .map((v) => v.puntuacion)
                         .toList();
-                    if (votos.isNotEmpty) {
-                      medias[vinoId] =
-                          votos.reduce((a, b) => a + b) / votos.length;
-                    } else {
-                      medias[vinoId] = 0;
-                    }
+                    medias[cataId] = votos.isNotEmpty
+                        ? votos.reduce((a, b) => a + b) / votos.length
+                        : 0;
                   }
 
-                  final maxMedia = medias.values.reduce(
-                    (a, b) => a > b ? a : b,
-                  );
-                  final minMedia = medias.values.reduce(
-                    (a, b) => a < b ? a : b,
-                  );
+                  // Asociar nombres temporales consistentes por ID
+                  final nombresGenericos = <String, String>{};
+                  int contador = 1;
+                  for (final cataId in catas) {
+                    nombresGenericos[cataId] = 'Cata $contador';
+                    contador++;
+                  }
 
-                  return SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        const DataColumn(label: Text('Usuario')),
-                        ...vinos.map(
-                          (vinoId) => DataColumn(
-                            label: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  mostrarNombres[vinoId]!
-                                      ? nombresVino[vinoId] ?? 'Sin nombre'
-                                      : 'Vino ${vinos.indexOf(vinoId) + 1}',
-                                ),
-                                IconButton(
-                                  icon: Icon(
-                                    mostrarNombres[vinoId]!
-                                        ? Icons.visibility_off
-                                        : Icons.visibility,
-                                    size: 18,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      mostrarNombres[vinoId] =
-                                          !mostrarNombres[vinoId]!;
-                                    });
-                                  },
-                                ),
-                              ],
+                  final sortedCataIds = [...catas];
+                  if (ordenarPorMedia) {
+                    sortedCataIds.sort(
+                      (a, b) => medias[b]!.compareTo(medias[a]!),
+                    );
+                  }
+
+                  return ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: sortedCataIds.length + 1,
+                    itemBuilder: (context, index) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: primaryColor,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
+                            icon: Icon(
+                              mostrarNombres
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                              color: textColor,
+                            ),
+                            label: Text(
+                              mostrarNombres
+                                  ? 'Ocultar nombres de catas'
+                                  : 'Mostrar nombres de catas',
+                              style: TextStyle(color: textColor),
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                mostrarNombres = !mostrarNombres;
+                              });
+                            },
                           ),
+                        );
+                      }
+
+                      final realIndex = index - 1;
+                      final cataId = sortedCataIds[realIndex];
+                      final votos = data[cataId]!;
+                      final media = medias[cataId]!;
+                      final nombreCata = mostrarNombres
+                          ? (nombresCata[cataId] ?? nombresGenericos[cataId]!)
+                          : nombresGenericos[cataId]!;
+
+                      return Card(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                      ],
-                      rows: [
-                        ...usuarioList.map((uid) {
-                          return DataRow(
-                            cells: [
-                              DataCell(Text(nombresUsuarios[uid] ?? uid)),
-                              ...vinos.map((vinoId) {
-                                final voto = data[vinoId]?[uid];
-                                return DataCell(
+                        color: Colors.white,
+                        margin: const EdgeInsets.symmetric(vertical: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                nombreCata,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  const Icon(Icons.star, color: Colors.amber),
+                                  const SizedBox(width: 4),
                                   Text(
-                                    voto != null
-                                        ? voto.puntuacion.toString()
-                                        : '-',
+                                    'Media: ${media.toStringAsFixed(1)} / 10',
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const Divider(height: 20),
+                              ...usuarioList.map((uid) {
+                                final voto = votos[uid];
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 4,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        nombresUsuarios[uid] ?? uid,
+                                        style: const TextStyle(fontSize: 14),
+                                      ),
+                                      Text(
+                                        voto != null
+                                            ? voto.puntuacion.toStringAsFixed(1)
+                                            : '-',
+                                        style: const TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 );
                               }),
                             ],
-                          );
-                        }),
-                        DataRow(
-                          color: WidgetStateProperty.all(Colors.white),
-                          cells: [
-                            const DataCell(
-                              Text(
-                                'Media',
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                            ...vinos.map((vinoId) {
-                              final media = medias[vinoId]!;
-                              Color? color;
-                              if (media == maxMedia) {
-                                color = Colors.green[300];
-                              } else if (media == minMedia) {
-                                color = Colors.red[300];
-                              }
-                              return DataCell(
-                                Container(
-                                  color: color,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  child: Text(
-                                    media.toStringAsFixed(1),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              );
-                            }),
-                          ],
+                          ),
                         ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               );

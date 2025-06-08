@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wine_app/screens/home.dart';
 import 'package:wine_app/services/auth_service.dart';
+import 'package:wine_app/utils/styles.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,6 +18,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final nombreController = TextEditingController();
   bool isLogin = true;
   bool isLoading = false;
+  bool showPassword = false;
 
   void _submit(AuthService auth) async {
     setState(() => isLoading = true);
@@ -45,7 +47,7 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Error: ${e.toString()}')));
+      ).showSnackBar(SnackBar(content: Text('Email o Contraseña incorrectos')));
     } finally {
       setState(() => isLoading = false);
     }
@@ -56,36 +58,62 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = Provider.of<AuthService>(context, listen: false);
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(isLogin ? 'Iniciar sesión' : 'Registrarse'),
-        centerTitle: true,
-        backgroundColor: Colors.blue,
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
+      backgroundColor: backgroundColor,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
         child: Column(
           children: [
-            if (!isLogin)
-              TextField(
-                controller: nombreController,
-                decoration: const InputDecoration(labelText: 'Nombre'),
+            SafeArea(
+              child: CircleAvatar(
+                radius: 70,
+                backgroundImage: const AssetImage('assets/images/logo.png'),
+                backgroundColor: Colors.transparent,
               ),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
             ),
+            const SizedBox(height: 32),
+            if (!isLogin) _styledTextField(nombreController, 'Nombre'),
+            const SizedBox(height: 12),
+            _styledTextField(
+              emailController,
+              'Email',
+              inputType: TextInputType.emailAddress,
+            ),
+            const SizedBox(height: 12),
             TextField(
               controller: passwordController,
-              decoration: const InputDecoration(labelText: 'Contraseña'),
-              obscureText: true,
+              obscureText: !showPassword,
+              decoration: _inputDecoration('Contraseña').copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    showPassword ? Icons.visibility_off : Icons.visibility,
+                    color: textColor,
+                  ),
+                  onPressed: () => setState(() {
+                    showPassword = !showPassword;
+                  }),
+                ),
+              ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             isLoading
                 ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: () => _submit(auth),
-                    child: Text(isLogin ? 'Entrar' : 'Crear cuenta'),
+                : SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () => _submit(auth),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        isLogin ? 'Entrar' : 'Crear cuenta',
+                        style: const TextStyle(fontSize: 16, color: textColor),
+                      ),
+                    ),
                   ),
             TextButton(
               onPressed: () => setState(() => isLogin = !isLogin),
@@ -93,11 +121,34 @@ class _LoginScreenState extends State<LoginScreen> {
                 isLogin
                     ? '¿No tienes cuenta? Regístrate'
                     : '¿Ya tienes cuenta? Inicia sesión',
+                style: TextStyle(color: textColor),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: textColor),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+      filled: true,
+      fillColor: Colors.white,
+    );
+  }
+
+  Widget _styledTextField(
+    TextEditingController controller,
+    String label, {
+    TextInputType inputType = TextInputType.text,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: inputType,
+      decoration: _inputDecoration(label),
     );
   }
 }
