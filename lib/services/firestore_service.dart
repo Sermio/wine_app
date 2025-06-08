@@ -19,6 +19,22 @@ class FirestoreService extends ChangeNotifier {
         );
   }
 
+  Future<void> deleteCata(String id) async {
+    final cataRef = _db.collection('catas').doc(id);
+
+    final elementos = await cataRef.collection('elementos').get();
+    for (var elemento in elementos.docs) {
+      final votos = await elemento.reference.collection('votos').get();
+      for (var voto in votos.docs) {
+        await voto.reference.delete();
+      }
+      await elemento.reference.delete();
+    }
+
+    await cataRef.delete();
+    notifyListeners();
+  }
+
   Future<void> addCata(Cata cata) async {
     await _db.collection('catas').doc(cata.id).set(cata.toJson());
   }
