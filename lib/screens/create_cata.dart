@@ -263,12 +263,11 @@ class _ElementoCataInput {
 
   void validate() {
     showNombreError = nombre.text.trim().isEmpty;
-    showDescripcionError = descripcion.text.trim().isEmpty;
+    showDescripcionError = false;
     showPrecioError = double.tryParse(precio.text) == null;
   }
 
-  bool isValid() =>
-      !showNombreError && !showDescripcionError && !showPrecioError;
+  bool isValid() => !showNombreError && !showPrecioError;
 
   Widget build(BuildContext context, int index, {VoidCallback? onRemove}) {
     return Card(
