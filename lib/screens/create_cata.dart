@@ -1,27 +1,27 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:wine_app/models/cata.dart';
+import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/services/firestore_service.dart';
 import 'package:wine_app/utils/styles.dart';
 
-class CreateVotacionScreen extends StatefulWidget {
-  const CreateVotacionScreen({super.key});
+class CreateCataScreen extends StatefulWidget {
+  const CreateCataScreen({super.key});
 
   @override
-  State<CreateVotacionScreen> createState() => _CreateVotacionScreenState();
+  State<CreateCataScreen> createState() => _CreateCataScreenState();
 }
 
-class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
+class _CreateCataScreenState extends State<CreateCataScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController nombreController = TextEditingController();
-  final List<_CataInput> _catas = [_CataInput()];
+  final List<_ElementoCataInput> _elementos = [_ElementoCataInput()];
   DateTime? _fecha;
   bool fechaObligatoria = false;
-  bool catasValidos = true;
+  bool elementosValidos = true;
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +31,7 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Nueva votación'),
+        title: const Text('Nueva cata'),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: textColor,
@@ -99,7 +99,7 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
               ),
               _styledTextField(
                 controller: nombreController,
-                label: 'Nombre de la votación',
+                label: 'Nombre de la cata',
                 validator: (value) => value == null || value.trim().isEmpty
                     ? 'Este campo es obligatorio'
                     : null,
@@ -113,25 +113,27 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
                   ),
                 ),
               const SizedBox(height: 16),
-              ..._catas.asMap().entries.map((entry) {
+              ..._elementos.asMap().entries.map((entry) {
                 final index = entry.key;
-                final cata = entry.value;
-                return cata.build(
+                final elemento = entry.value;
+                return elemento.build(
                   context,
-                  onRemove: () => setState(() => _catas.removeAt(index)),
+                  index,
+                  onRemove: () => setState(() => _elementos.removeAt(index)),
                 );
               }),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               FloatingActionButton(
                 backgroundColor: primaryColor,
-                onPressed: () => setState(() => _catas.add(_CataInput())),
+                onPressed: () =>
+                    setState(() => _elementos.add(_ElementoCataInput())),
                 child: const Icon(Icons.add, color: textColor),
               ),
-              if (!catasValidos)
+              if (!elementosValidos)
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Debe haber al menos una cata válido (nombre, descripción y precio)',
+                    'Debe haber al menos un elemento válido',
                     style: TextStyle(color: Colors.red),
                   ),
                 ),
@@ -150,16 +152,16 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
                     }
 
                     final creador = auth.currentUser!.uid;
-                    final catas = <Cata>[];
+                    final elementos = <ElementoCata>[];
 
-                    catasValidos = false;
+                    elementosValidos = false;
 
-                    for (var v in _catas) {
+                    for (var v in _elementos) {
                       v.validate();
-                      if (v.isValid()) catasValidos = true;
+                      if (v.isValid()) elementosValidos = true;
                     }
 
-                    if (!catasValidos) hasError = true;
+                    if (!elementosValidos) hasError = true;
 
                     setState(() {});
 
@@ -172,11 +174,15 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
                       return;
                     }
 
-                    for (var v in _catas) {
+                    for (var entry in _elementos.asMap().entries) {
+                      final index = entry.key;
+                      final v = entry.value;
+
                       if (v.isValid()) {
-                        catas.add(
-                          Cata(
+                        elementos.add(
+                          ElementoCata(
                             id: const Uuid().v4(),
+                            nombreAuxiliar: 'Cata ${index + 1}',
                             nombre: v.nombre.text,
                             descripcion: v.descripcion.text,
                             precio: double.tryParse(v.precio.text) ?? 0,
@@ -186,15 +192,25 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
                       }
                     }
 
-                    await firestore.addVotacion(
-                      _fecha!,
-                      creador,
-                      nombreController.text.trim(),
-                      catas,
+                    final nuevaCata = Cata(
+                      id: const Uuid().v4(),
+                      nombre: nombreController.text.trim(),
+                      fecha: _fecha!,
+                      creadorId: creador,
+                      elementos: elementos,
+                    );
+
+                    await firestore.addVotacion(nuevaCata);
+
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Cata creada correctamente'),
+                      ),
                     );
 
                     Navigator.pop(context);
                   },
+
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
@@ -204,7 +220,7 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
                     ),
                   ),
                   child: const Text(
-                    'Crear votación',
+                    'Crear cata',
                     style: TextStyle(color: textColor),
                   ),
                 ),
@@ -235,7 +251,7 @@ class _CreateVotacionScreenState extends State<CreateVotacionScreen> {
   }
 }
 
-class _CataInput {
+class _ElementoCataInput {
   final nombre = TextEditingController();
   final descripcion = TextEditingController();
   final precio = TextEditingController();
@@ -254,75 +270,63 @@ class _CataInput {
   bool isValid() =>
       !showNombreError && !showDescripcionError && !showPrecioError;
 
-  Widget build(BuildContext context, {VoidCallback? onRemove}) {
-    return Stack(
-      children: [
-        Card(
-          color: Colors.white,
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
+  Widget build(BuildContext context, int index, {VoidCallback? onRemove}) {
+    return Card(
+      color: Colors.white,
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Cata',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    if (onRemove != null)
-                      IconButton(
-                        icon: const Icon(
-                          Icons.remove_circle,
-                          color: primaryColor,
-                        ),
-                        onPressed: onRemove,
-                        tooltip: 'Eliminar cata',
-                      ),
-                  ],
+                Text(
+                  'Elemento ${index + 1}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-                const SizedBox(height: 8),
-                _styledField(
-                  controller: nombre,
-                  label: 'Nombre',
-                  errorText: showNombreError ? 'Campo obligatorio' : null,
-                ),
-                const SizedBox(height: 8),
-                _styledField(
-                  controller: descripcion,
-                  label: 'Descripción',
-                  errorText: showDescripcionError ? 'Campo obligatorio' : null,
-                ),
-                const SizedBox(height: 8),
-                _styledField(
-                  controller: precio,
-                  label: 'Precio (€)',
-                  keyboardType: TextInputType.number,
-                  errorText: showPrecioError
-                      ? 'Introduce un número válido'
-                      : null,
-                ),
-                if (imagenPath != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Image.file(
-                      File(imagenPath!),
-                      height: 100,
-                      fit: BoxFit.cover,
-                    ),
+                if (onRemove != null)
+                  IconButton(
+                    icon: const Icon(Icons.remove_circle, color: primaryColor),
+                    onPressed: onRemove,
                   ),
               ],
             ),
-          ),
+            const SizedBox(height: 8),
+            _styledField(
+              controller: nombre,
+              label: 'Nombre',
+              errorText: showNombreError ? 'Campo obligatorio' : null,
+            ),
+            const SizedBox(height: 8),
+            _styledField(
+              controller: descripcion,
+              label: 'Descripción',
+              errorText: showDescripcionError ? 'Campo obligatorio' : null,
+            ),
+            const SizedBox(height: 8),
+            _styledField(
+              controller: precio,
+              label: 'Precio (€)',
+              keyboardType: TextInputType.number,
+              errorText: showPrecioError ? 'Introduce un número válido' : null,
+            ),
+            if (imagenPath != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Image.file(
+                  File(imagenPath!),
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
+              ),
+          ],
         ),
-      ],
+      ),
     );
   }
 

@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wine_app/models/cata.dart';
+import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/models/voto.dart';
 import 'package:wine_app/services/firestore_service.dart';
 import 'package:wine_app/utils/styles.dart';
 
 class VoteForm extends StatefulWidget {
   final String votacionId;
-  final Cata cata;
+  final ElementoCata elemento;
   final String userId;
+  final DateTime fechaCata;
 
   const VoteForm({
     super.key,
     required this.votacionId,
-    required this.cata,
+    required this.elemento,
     required this.userId,
+    required this.fechaCata,
   });
 
   @override
@@ -37,7 +39,7 @@ class _VoteFormState extends State<VoteForm> {
     final firestore = Provider.of<FirestoreService>(context, listen: false);
     final voto = await firestore.getVotoUsuario(
       widget.votacionId,
-      widget.cata.id,
+      widget.elemento.id,
       widget.userId,
     );
 
@@ -58,6 +60,10 @@ class _VoteFormState extends State<VoteForm> {
       return const Center(child: CircularProgressIndicator());
     }
 
+    final isCataPasada = widget.fechaCata.isBefore(
+      DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+    );
+
     final firestore = Provider.of<FirestoreService>(context, listen: false);
 
     return Column(
@@ -74,7 +80,9 @@ class _VoteFormState extends State<VoteForm> {
                 label: puntuacion.toStringAsFixed(1),
                 activeColor: primaryColor,
                 inactiveColor: primaryColor.withOpacity(0.3),
-                onChanged: (val) => setState(() => puntuacion = val),
+                onChanged: isCataPasada
+                    ? null
+                    : (val) => setState(() => puntuacion = val),
               ),
             ),
             const SizedBox(width: 8),
@@ -92,6 +100,7 @@ class _VoteFormState extends State<VoteForm> {
         TextField(
           controller: comentario,
           maxLines: 2,
+          enabled: !isCataPasada,
           decoration: InputDecoration(
             labelText: 'Comentario',
             labelStyle: TextStyle(color: textColor),
@@ -104,33 +113,35 @@ class _VoteFormState extends State<VoteForm> {
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
-            onPressed: () async {
-              final voto = Voto(
-                usuarioId: widget.userId,
-                puntuacion: puntuacion,
-                comentario: comentario.text,
-              );
-              await firestore.addOrUpdateVoto(
-                widget.votacionId,
-                widget.cata.id,
-                widget.userId,
-                voto,
-              );
-              final yaHabiaVotado = votoRegistrado;
-              setState(() => votoRegistrado = true);
+            onPressed: isCataPasada
+                ? null
+                : () async {
+                    final voto = Voto(
+                      usuarioId: widget.userId,
+                      puntuacion: puntuacion,
+                      comentario: comentario.text,
+                    );
+                    await firestore.addOrUpdateVoto(
+                      widget.votacionId,
+                      widget.elemento.id,
+                      widget.userId,
+                      voto,
+                    );
+                    final yaHabiaVotado = votoRegistrado;
+                    setState(() => votoRegistrado = true);
 
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      yaHabiaVotado
-                          ? 'Has actualizado tu voto'
-                          : 'Voto registrado',
-                    ),
-                  ),
-                );
-              }
-            },
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            yaHabiaVotado
+                                ? 'Has actualizado tu voto'
+                                : 'Voto registrado',
+                          ),
+                        ),
+                      );
+                    }
+                  },
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               foregroundColor: Colors.white,

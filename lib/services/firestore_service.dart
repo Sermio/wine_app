@@ -1,46 +1,64 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:wine_app/models/votacion.dart';
+import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/models/cata.dart';
 import 'package:wine_app/models/voto.dart';
 
 class FirestoreService extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Stream<List<Votacion>> streamCatas() {
+  Stream<List<Cata>> streamCatas() {
     return _db
         .collection('catas')
         .orderBy('fecha', descending: true)
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map((doc) => Votacion.fromJson(doc.id, doc.data()))
+              .map((doc) => Cata.fromJson(doc.id, doc.data()))
               .toList(),
         );
   }
 
-  Future<List<Cata>> fetchCatasDeVotacion(String votacionId) async {
+  Future<void> addCata(Cata cata) async {
+    await _db.collection('catas').doc(cata.id).set(cata.toJson());
+  }
+
+  Future<Cata?> fetchCata(String cataId) async {
+    final doc = await _db.collection('catas').doc(cataId).get();
+    if (doc.exists) {
+      return Cata.fromJson(doc.id, doc.data()!);
+    }
+    return null;
+  }
+
+  Future<List<ElementoCata>> fetchElementosDeCata(String cataId) async {
     final snapshot = await _db
         .collection('catas')
-        .doc(votacionId)
-        .collection('catas')
+        .doc(cataId)
+        .collection('elementos')
         .get();
 
     return snapshot.docs
-        .map((doc) => Cata.fromJson(doc.id, doc.data()))
+        .map((doc) => ElementoCata.fromJson(doc.id, doc.data()))
         .toList();
   }
 
   Future<Voto?> getVotoUsuario(
-    String votacionId,
     String cataId,
+    String elementoId,
     String userId,
   ) async {
-    final doc = await FirebaseFirestore.instance
-        .collection('catas')
-        .doc(votacionId)
+    if (cataId.trim().isEmpty ||
+        elementoId.trim().isEmpty ||
+        userId.trim().isEmpty) {
+      throw ArgumentError('cataId, elementoId y userId no pueden estar vacíos');
+    }
+
+    final doc = await _db
         .collection('catas')
         .doc(cataId)
+        .collection('elementos')
+        .doc(elementoId)
         .collection('votos')
         .doc(userId)
         .get();
@@ -55,10 +73,7 @@ class FirestoreService extends ChangeNotifier {
     Map<String, String> nombres = {};
 
     for (var uid in uids) {
-      final doc = await FirebaseFirestore.instance
-          .collection('usuarios')
-          .doc(uid)
-          .get();
+      final doc = await _db.collection('usuarios').doc(uid).get();
       if (doc.exists) {
         nombres[uid] = doc.data()!['nombre'] ?? 'Desconocido';
       } else {
@@ -69,72 +84,120 @@ class FirestoreService extends ChangeNotifier {
     return nombres;
   }
 
-  Future<List<Votacion>> fetchCatas() async {
+  Future<List<Cata>> fetchCatas() async {
     final snapshot = await _db.collection('catas').orderBy('fecha').get();
     return snapshot.docs
-        .map((doc) => Votacion.fromJson(doc.id, doc.data()))
+        .map((doc) => Cata.fromJson(doc.id, doc.data()))
         .toList();
   }
 
-  Future<void> addVotacion(
-    DateTime fecha,
-    String creadorId,
-    String nombre,
-    List<Cata> catas,
-  ) async {
-    final votacionRef = await _db.collection('catas').add({
-      'fecha': fecha.toIso8601String(),
-      'creadorId': creadorId,
-      'nombre': nombre,
+  Future<void> addVotacion(Cata cata) async {
+    if (cata.id.trim().isEmpty)
+      throw Exception('El ID de la cata no puede estar vacío');
+    for (var elemento in cata.elementos) {
+      if (elemento.id.trim().isEmpty)
+        throw Exception('Todos los elementos deben tener un ID definido');
+    }
+
+    final cataRef = _db.collection('catas').doc(cata.id);
+    await cataRef.set({
+      'nombre': cata.nombre,
+      'fecha': cata.fecha.toIso8601String(),
+      'creadorId': cata.creadorId,
     });
 
-    for (var cata in catas) {
-      await votacionRef.collection('catas').add(cata.toJson());
+    for (var elemento in cata.elementos) {
+      await cataRef
+          .collection('elementos')
+          .doc(elemento.id)
+          .set(elemento.toJson());
     }
 
     notifyListeners();
   }
 
   Future<void> addOrUpdateVoto(
-    String votacionId,
     String cataId,
+    String elementoId,
     String userId,
     Voto voto,
   ) async {
     await _db
         .collection('catas')
-        .doc(votacionId)
-        .collection('catas')
         .doc(cataId)
+        .collection('elementos')
+        .doc(elementoId)
         .collection('votos')
         .doc(userId)
         .set(voto.toJson());
     notifyListeners();
   }
 
-  Future<(Map<String, Map<String, Voto>>, Map<String, String>)> fetchResultados(
-    String votacionId,
-  ) async {
-    final catasSnap = await _db
+  Future<
+    (
+      Map<String, Map<String, Voto>> votosPorElemento,
+      Map<String, String> nombresDeElemento,
+    )
+  >
+  fetchResultados(String cataId) async {
+    final elementosSnap = await _db
         .collection('catas')
-        .doc(votacionId)
-        .collection('catas')
+        .doc(cataId)
+        .collection('elementos')
         .get();
-    Map<String, Map<String, Voto>> votosPorCata = {};
-    Map<String, String> nombresDeCata = {};
 
-    for (var cataDoc in catasSnap.docs) {
-      final cataId = cataDoc.id;
-      final nombre = cataDoc.data()['nombre'] ?? 'Cata';
-      nombresDeCata[cataId] = nombre;
+    Map<String, Map<String, Voto>> votosPorElemento = {};
+    Map<String, String> nombresDeElemento = {};
 
-      final votosSnap = await cataDoc.reference.collection('votos').get();
-      votosPorCata[cataId] = {
+    for (var elementoDoc in elementosSnap.docs) {
+      final elementoId = elementoDoc.id;
+      final nombre = elementoDoc.data()['nombreAuxiliar'] ?? 'Elemento';
+      nombresDeElemento[elementoId] = nombre;
+
+      final votosSnap = await elementoDoc.reference.collection('votos').get();
+      votosPorElemento[elementoId] = {
         for (var votoDoc in votosSnap.docs)
           votoDoc.id: Voto.fromJson(votoDoc.id, votoDoc.data()),
       };
     }
 
-    return (votosPorCata, nombresDeCata);
+    return (votosPorElemento, nombresDeElemento);
+  }
+
+  Future<
+    (
+      Map<String, Map<String, Voto>>,
+      Map<String, String>, // nombres
+      Map<String, String>, // nombresAux
+    )
+  >
+  fetchResultadosConNombres(String cataId) async {
+    final elementosSnap = await _db
+        .collection('catas')
+        .doc(cataId)
+        .collection('elementos')
+        .get();
+
+    Map<String, Map<String, Voto>> votosPorElemento = {};
+    Map<String, String> nombres = {};
+    Map<String, String> nombresAux = {};
+
+    for (var doc in elementosSnap.docs) {
+      final elementoId = doc.id;
+      final data = doc.data();
+      final nombre = data['nombre'] ?? 'Elemento';
+      final nombreAux = data['nombreAuxiliar'] ?? 'Elemento';
+
+      nombres[elementoId] = nombre;
+      nombresAux[elementoId] = nombreAux;
+
+      final votosSnap = await doc.reference.collection('votos').get();
+      votosPorElemento[elementoId] = {
+        for (var voto in votosSnap.docs)
+          voto.id: Voto.fromJson(voto.id, voto.data()),
+      };
+    }
+
+    return (votosPorElemento, nombres, nombresAux);
   }
 }

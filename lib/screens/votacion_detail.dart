@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wine_app/models/votacion.dart';
 import 'package:wine_app/models/cata.dart';
+import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/screens/resultados.dart';
+import 'package:wine_app/screens/vote_form.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/services/firestore_service.dart';
-import 'package:wine_app/screens/vote_form.dart';
 import 'package:wine_app/utils/styles.dart';
 
 class VotacionDetailScreen extends StatelessWidget {
-  final Votacion votacion;
+  final Cata cata;
 
-  const VotacionDetailScreen({super.key, required this.votacion});
+  const VotacionDetailScreen({super.key, required this.cata});
 
   @override
   Widget build(BuildContext context) {
@@ -21,52 +21,50 @@ class VotacionDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text(
-          'Detalles de la votación',
-          style: TextStyle(color: textColor),
-        ),
+        title: const Text('Votaciones', style: TextStyle(color: textColor)),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: textColor,
         actions: [
           IconButton(
-            color: textColor,
-            icon: const Icon(Icons.bar_chart),
+            icon: const Icon(Icons.bar_chart, color: textColor),
             tooltip: 'Ver resultados',
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => ResultadosScreen(votacionId: votacion.id),
+                  builder: (_) => ResultadosScreen(votacionId: cata.id),
                 ),
               );
             },
           ),
         ],
       ),
-      body: FutureBuilder<List<Cata>>(
-        future: firestore.fetchCatasDeVotacion(votacion.id),
+      body: FutureBuilder<List<ElementoCata>>(
+        future: firestore.fetchElementosDeCata(cata.id),
         builder: (context, snapshot) {
           if (!snapshot.hasData) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          final catas = snapshot.data!;
-          return SafeArea(
-            top: false,
-            bottom: true,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: catas.length,
-              itemBuilder: (context, index) {
-                final cata = catas[index];
-                return _CataCard(
-                  index: index,
-                  cata: cata,
-                  votacionId: votacion.id,
-                  userId: auth.currentUser!.uid,
-                );
-              },
-            ),
+          final elementos = snapshot.data!;
+          elementos.sort(
+            (a, b) => a.nombreAuxiliar.compareTo(b.nombreAuxiliar),
+          );
+          final userId = auth.currentUser!.uid;
+
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: elementos.length,
+            itemBuilder: (context, index) {
+              final elemento = elementos[index];
+              return _ElementoCataCard(
+                index: index,
+                elemento: elemento,
+                votacionId: cata.id,
+                userId: userId,
+                fechaCata: cata.fecha,
+              );
+            },
           );
         },
       ),
@@ -74,24 +72,26 @@ class VotacionDetailScreen extends StatelessWidget {
   }
 }
 
-class _CataCard extends StatefulWidget {
+class _ElementoCataCard extends StatefulWidget {
   final int index;
-  final Cata cata;
+  final ElementoCata elemento;
   final String votacionId;
   final String userId;
+  final DateTime fechaCata;
 
-  const _CataCard({
+  const _ElementoCataCard({
     required this.index,
-    required this.cata,
+    required this.elemento,
     required this.votacionId,
     required this.userId,
+    required this.fechaCata,
   });
 
   @override
-  State<_CataCard> createState() => _CataCardState();
+  State<_ElementoCataCard> createState() => _ElementoCataCardState();
 }
 
-class _CataCardState extends State<_CataCard> {
+class _ElementoCataCardState extends State<_ElementoCataCard> {
   bool mostrarNombre = false;
 
   @override
@@ -106,38 +106,24 @@ class _CataCardState extends State<_CataCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  mostrarNombre
-                      ? widget.cata.nombre
-                      : 'Cata ${widget.index + 1}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 20,
-                  ),
+            Center(
+              child: Text(
+                mostrarNombre
+                    ? widget.elemento.nombre
+                    : widget.elemento.nombreAuxiliar,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
                 ),
-                // Puedes habilitar esto si quieres permitir mostrar el nombre real:
-                // IconButton(
-                //   icon: Icon(
-                //     mostrarNombre ? Icons.visibility_off : Icons.visibility,
-                //     size: 20,
-                //     color: Colors.grey,
-                //   ),
-                //   onPressed: () {
-                //     setState(() => mostrarNombre = !mostrarNombre);
-                //   },
-                // ),
-              ],
+              ),
             ),
             const SizedBox(height: 8),
             VoteForm(
               votacionId: widget.votacionId,
-              cata: widget.cata,
+              elemento: widget.elemento,
+              fechaCata: widget.fechaCata,
               userId: widget.userId,
             ),
-            // SizedBox(height: 400),
           ],
         ),
       ),
