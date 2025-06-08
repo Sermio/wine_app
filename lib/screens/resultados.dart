@@ -46,6 +46,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
               Map<String, Map<String, Voto>>, // elementoId → userId → Voto
               Map<String, String>, // elementoId → nombre
               Map<String, String>, // elementoId → nombreAuxiliar
+              Map<String, double>, // elementoId → precio
             )
           >(
             future: firestore.fetchResultadosConNombres(widget.votacionId),
@@ -54,7 +55,8 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final (votosPorElemento, nombres, nombresAux) = snapshot.data!;
+              final (votosPorElemento, nombres, nombresAux, precios) =
+                  snapshot.data!;
               final elementoIds = votosPorElemento.keys.toList()
                 ..sort((a, b) {
                   final auxA = nombresAux[a] ?? '';
@@ -137,9 +139,13 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                       final votos = votosPorElemento[elementoId]!;
                       final media = medias[elementoId]!;
 
+                      final nombreReal = nombres[elementoId] ?? 'Elemento';
+                      final precio = precios[elementoId];
+                      final nombreAux = nombresAux[elementoId] ?? 'Elemento';
+
                       final nombreMostrar = mostrarNombres
-                          ? (nombres[elementoId] ?? 'Elemento')
-                          : (nombresAux[elementoId] ?? 'Elemento');
+                          ? '$nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
+                          : nombreAux;
 
                       return Card(
                         shape: RoundedRectangleBorder(
