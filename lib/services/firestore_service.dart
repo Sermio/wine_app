@@ -182,9 +182,10 @@ class FirestoreService extends ChangeNotifier {
 
   Future<
     (
-      Map<String, Map<String, Voto>>,
-      Map<String, String>, // nombres
-      Map<String, String>, // nombresAux
+      Map<String, Map<String, Voto>>, // votos por elemento
+      Map<String, String>, // nombres reales
+      Map<String, String>, // nombres auxiliares
+      Map<String, double>, // precios
     )
   >
   fetchResultadosConNombres(String cataId) async {
@@ -197,15 +198,20 @@ class FirestoreService extends ChangeNotifier {
     Map<String, Map<String, Voto>> votosPorElemento = {};
     Map<String, String> nombres = {};
     Map<String, String> nombresAux = {};
+    Map<String, double> precios = {};
 
     for (var doc in elementosSnap.docs) {
       final elementoId = doc.id;
       final data = doc.data();
       final nombre = data['nombre'] ?? 'Elemento';
       final nombreAux = data['nombreAuxiliar'] ?? 'Elemento';
+      final precio = (data['precio'] as num?)?.toDouble();
 
       nombres[elementoId] = nombre;
       nombresAux[elementoId] = nombreAux;
+      if (precio != null) {
+        precios[elementoId] = precio;
+      }
 
       final votosSnap = await doc.reference.collection('votos').get();
       votosPorElemento[elementoId] = {
@@ -214,6 +220,6 @@ class FirestoreService extends ChangeNotifier {
       };
     }
 
-    return (votosPorElemento, nombres, nombresAux);
+    return (votosPorElemento, nombres, nombresAux, precios);
   }
 }
