@@ -11,6 +11,57 @@ import 'package:wine_app/utils/styles.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  Future<void> confirmarYBorrarCata(
+    BuildContext context,
+    FirestoreService firestore,
+    Cata cata,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Center(
+          child: Text(
+            'Eliminar cata',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ),
+        content: Text('¿Quieres eliminar la cata "${cata.nombre}"?'),
+        actions: [
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: textColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Cancelar'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: textColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Eliminar'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      await firestore.deleteCata(cata.id);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Cata "${cata.nombre}" eliminada')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context, listen: false);
@@ -114,6 +165,9 @@ class HomeScreen extends StatelessWidget {
                         builder: (_) => VotacionDetailScreen(cata: cata),
                       ),
                     );
+                  },
+                  onLongPress: () {
+                    confirmarYBorrarCata(context, firestore, cata);
                   },
                 ),
               );
