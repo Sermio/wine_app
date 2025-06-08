@@ -41,17 +41,29 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
         ],
       ),
       body:
-          FutureBuilder<(Map<String, Map<String, Voto>>, Map<String, String>)>(
-            future: firestore.fetchResultados(widget.votacionId),
+          FutureBuilder<
+            (
+              Map<String, Map<String, Voto>>, // elementoId → userId → Voto
+              Map<String, String>, // elementoId → nombre
+              Map<String, String>, // elementoId → nombreAuxiliar
+            )
+          >(
+            future: firestore.fetchResultadosConNombres(widget.votacionId),
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final (data, nombresCata) = snapshot.data!;
-              final catas = data.keys.toList();
+              final (votosPorElemento, nombres, nombresAux) = snapshot.data!;
+              final elementoIds = votosPorElemento.keys.toList()
+                ..sort((a, b) {
+                  final auxA = nombresAux[a] ?? '';
+                  final auxB = nombresAux[b] ?? '';
+                  return auxA.compareTo(auxB);
+                });
+
               final usuarios = <String>{};
-              for (var votos in data.values) {
+              for (var votos in votosPorElemento.values) {
                 usuarios.addAll(votos.keys);
               }
 
@@ -66,33 +78,26 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                   final usuarioList = usuarios.toList();
 
                   final medias = <String, double>{};
-                  for (var cataId in catas) {
-                    final votos = data[cataId]!.values
+                  for (var elementoId in elementoIds) {
+                    final puntuaciones = votosPorElemento[elementoId]!.values
                         .map((v) => v.puntuacion)
                         .toList();
-                    medias[cataId] = votos.isNotEmpty
-                        ? votos.reduce((a, b) => a + b) / votos.length
+                    medias[elementoId] = puntuaciones.isNotEmpty
+                        ? puntuaciones.reduce((a, b) => a + b) /
+                              puntuaciones.length
                         : 0;
                   }
 
-                  // Asociar nombres temporales consistentes por ID
-                  final nombresGenericos = <String, String>{};
-                  int contador = 1;
-                  for (final cataId in catas) {
-                    nombresGenericos[cataId] = 'Cata $contador';
-                    contador++;
-                  }
-
-                  final sortedCataIds = [...catas];
+                  final sortedElementoIds = [...elementoIds];
                   if (ordenarPorMedia) {
-                    sortedCataIds.sort(
+                    sortedElementoIds.sort(
                       (a, b) => medias[b]!.compareTo(medias[a]!),
                     );
                   }
 
                   return ListView.builder(
                     padding: const EdgeInsets.all(16),
-                    itemCount: sortedCataIds.length + 1,
+                    itemCount: sortedElementoIds.length + 1,
                     itemBuilder: (context, index) {
                       if (index == 0) {
                         return Padding(
@@ -114,9 +119,9 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                             ),
                             label: Text(
                               mostrarNombres
-                                  ? 'Ocultar nombres de catas'
-                                  : 'Mostrar nombres de catas',
-                              style: TextStyle(color: textColor),
+                                  ? 'Ocultar nombres reales'
+                                  : 'Mostrar nombres reales',
+                              style: const TextStyle(color: textColor),
                             ),
                             onPressed: () {
                               setState(() {
@@ -128,12 +133,13 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                       }
 
                       final realIndex = index - 1;
-                      final cataId = sortedCataIds[realIndex];
-                      final votos = data[cataId]!;
-                      final media = medias[cataId]!;
-                      final nombreCata = mostrarNombres
-                          ? (nombresCata[cataId] ?? nombresGenericos[cataId]!)
-                          : nombresGenericos[cataId]!;
+                      final elementoId = sortedElementoIds[realIndex];
+                      final votos = votosPorElemento[elementoId]!;
+                      final media = medias[elementoId]!;
+
+                      final nombreMostrar = mostrarNombres
+                          ? (nombres[elementoId] ?? 'Elemento')
+                          : (nombresAux[elementoId] ?? 'Elemento');
 
                       return Card(
                         shape: RoundedRectangleBorder(
@@ -147,7 +153,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                nombreCata,
+                                nombreMostrar,
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 18,

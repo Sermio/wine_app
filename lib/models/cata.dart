@@ -1,32 +1,35 @@
+import 'package:wine_app/models/elemento_cata.dart';
+
 class Cata {
   final String id;
   final String nombre;
-  final String descripcion;
-  final double precio;
-  final String imagenUrl;
+  final DateTime fecha;
+  final String creadorId;
+  final List<ElementoCata> elementos;
 
   Cata({
     required this.id,
     required this.nombre,
-    required this.descripcion,
-    required this.precio,
-    required this.imagenUrl,
+    required this.fecha,
+    required this.creadorId,
+    required this.elementos,
   });
 
   Map<String, dynamic> toJson() => {
+    'id': id,
     'nombre': nombre,
-    'descripcion': descripcion,
-    'precio': precio,
-    'imagenUrl': imagenUrl,
+    'fecha': fecha.toIso8601String(),
+    'creadorId': creadorId,
+    'elementos': elementos.map((e) => e.toJson()).toList(),
   };
 
   static Cata fromJson(String id, Map<String, dynamic> json) {
     return Cata(
       id: id,
       nombre: json['nombre'],
-      descripcion: json['descripcion'],
-      precio: (json['precio'] as num).toDouble(),
-      imagenUrl: json['imagenUrl'],
+      fecha: DateTime.parse(json['fecha']),
+      creadorId: json['creadorId'],
+      elementos: [],
     );
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wine_app/models/votacion.dart';
-import 'package:wine_app/screens/create_votacion.dart';
+import 'package:wine_app/models/cata.dart';
+import 'package:wine_app/screens/create_cata.dart';
 import 'package:wine_app/screens/login.dart';
 import 'package:wine_app/screens/votacion_detail.dart';
 import 'package:wine_app/services/auth_service.dart';
@@ -35,7 +35,7 @@ class HomeScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: StreamBuilder<List<Votacion>>(
+      body: StreamBuilder<List<Cata>>(
         stream: firestore.streamCatas(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -48,19 +48,19 @@ class HomeScreen extends StatelessWidget {
 
           final catas = snapshot.data!;
           final ahora = DateTime.now();
+          final hoy = DateTime(ahora.year, ahora.month, ahora.day);
 
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: catas.length,
             itemBuilder: (context, index) {
-              final votacion = catas[index];
-              final fechaHoy = DateTime(ahora.year, ahora.month, ahora.day);
-              final fechaVotacion = DateTime(
-                votacion.fecha.year,
-                votacion.fecha.month,
-                votacion.fecha.day,
+              final cata = catas[index];
+              final fechaCata = DateTime(
+                cata.fecha.year,
+                cata.fecha.month,
+                cata.fecha.day,
               );
-              final esPasada = fechaVotacion.isBefore(fechaHoy);
+              final esPasada = fechaCata.isBefore(hoy);
 
               return Card(
                 elevation: 4,
@@ -82,7 +82,7 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ),
                   title: Text(
-                    votacion.nombre,
+                    cata.nombre,
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -94,12 +94,12 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       const SizedBox(height: 4),
                       Text(
-                        'Fecha: ${votacion.fecha.toLocal().toString().split(' ')[0]}',
+                        'Fecha: ${cata.fecha.toLocal().toString().split(' ')[0]}',
                         style: TextStyle(color: Colors.grey[700]),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        esPasada ? 'Votación finalizada' : 'Votación en curso',
+                        esPasada ? 'Cata finalizada' : 'Cata en curso',
                         style: TextStyle(
                           fontStyle: FontStyle.italic,
                           color: esPasada ? Colors.red[400] : Colors.green[700],
@@ -111,8 +111,7 @@ class HomeScreen extends StatelessWidget {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            VotacionDetailScreen(votacion: votacion),
+                        builder: (_) => VotacionDetailScreen(cata: cata),
                       ),
                     );
                   },
@@ -125,9 +124,9 @@ class HomeScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton(
         backgroundColor: primaryColor,
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const CreateVotacionScreen()),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const CreateCataScreen()));
         },
         child: const Icon(Icons.add, color: textColor),
       ),
