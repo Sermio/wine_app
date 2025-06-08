@@ -1,22 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wine_app/models/votacion.dart';
-import 'package:wine_app/models/vino.dart';
+import 'package:wine_app/models/cata.dart';
 import 'package:wine_app/models/voto.dart';
 
 class FirestoreService extends ChangeNotifier {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
-  Future<List<Vino>> fetchVinosDeVotacion(String votacionId) async {
+  Stream<List<Votacion>> streamCatas() {
+    return _db
+        .collection('catas')
+        .orderBy('fecha', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => Votacion.fromJson(doc.id, doc.data()))
+              .toList(),
+        );
+  }
+
+  Future<List<Cata>> fetchCatasDeVotacion(String votacionId) async {
     final snapshot = await _db
-        .collection('votaciones')
+        .collection('catas')
         .doc(votacionId)
-        .collection('vinos')
+        .collection('catas')
         .get();
 
     return snapshot.docs
-        .map((doc) => Vino.fromJson(doc.id, doc.data()))
+        .map((doc) => Cata.fromJson(doc.id, doc.data()))
         .toList();
+  }
+
+  Future<Voto?> getVotoUsuario(
+    String votacionId,
+    String cataId,
+    String userId,
+  ) async {
+    final doc = await FirebaseFirestore.instance
+        .collection('catas')
+        .doc(votacionId)
+        .collection('catas')
+        .doc(cataId)
+        .collection('votos')
+        .doc(userId)
+        .get();
+
+    if (doc.exists && doc.data() != null) {
+      return Voto.fromJson(userId, doc.data()!);
+    }
+    return null;
   }
 
   Future<Map<String, String>> fetchNombresUsuarios(Set<String> uids) async {
@@ -37,8 +69,8 @@ class FirestoreService extends ChangeNotifier {
     return nombres;
   }
 
-  Future<List<Votacion>> fetchVotaciones() async {
-    final snapshot = await _db.collection('votaciones').orderBy('fecha').get();
+  Future<List<Votacion>> fetchCatas() async {
+    final snapshot = await _db.collection('catas').orderBy('fecha').get();
     return snapshot.docs
         .map((doc) => Votacion.fromJson(doc.id, doc.data()))
         .toList();
@@ -48,16 +80,16 @@ class FirestoreService extends ChangeNotifier {
     DateTime fecha,
     String creadorId,
     String nombre,
-    List<Vino> vinos,
+    List<Cata> catas,
   ) async {
-    final votacionRef = await _db.collection('votaciones').add({
+    final votacionRef = await _db.collection('catas').add({
       'fecha': fecha.toIso8601String(),
       'creadorId': creadorId,
       'nombre': nombre,
     });
 
-    for (var vino in vinos) {
-      await votacionRef.collection('vinos').add(vino.toJson());
+    for (var cata in catas) {
+      await votacionRef.collection('catas').add(cata.toJson());
     }
 
     notifyListeners();
@@ -65,15 +97,15 @@ class FirestoreService extends ChangeNotifier {
 
   Future<void> addOrUpdateVoto(
     String votacionId,
-    String vinoId,
+    String cataId,
     String userId,
     Voto voto,
   ) async {
     await _db
-        .collection('votaciones')
+        .collection('catas')
         .doc(votacionId)
-        .collection('vinos')
-        .doc(vinoId)
+        .collection('catas')
+        .doc(cataId)
         .collection('votos')
         .doc(userId)
         .set(voto.toJson());
@@ -83,26 +115,26 @@ class FirestoreService extends ChangeNotifier {
   Future<(Map<String, Map<String, Voto>>, Map<String, String>)> fetchResultados(
     String votacionId,
   ) async {
-    final vinosSnap = await _db
-        .collection('votaciones')
+    final catasSnap = await _db
+        .collection('catas')
         .doc(votacionId)
-        .collection('vinos')
+        .collection('catas')
         .get();
-    Map<String, Map<String, Voto>> votosPorVino = {};
-    Map<String, String> nombresDeVino = {};
+    Map<String, Map<String, Voto>> votosPorCata = {};
+    Map<String, String> nombresDeCata = {};
 
-    for (var vinoDoc in vinosSnap.docs) {
-      final vinoId = vinoDoc.id;
-      final nombre = vinoDoc.data()['nombre'] ?? 'Vino';
-      nombresDeVino[vinoId] = nombre;
+    for (var cataDoc in catasSnap.docs) {
+      final cataId = cataDoc.id;
+      final nombre = cataDoc.data()['nombre'] ?? 'Cata';
+      nombresDeCata[cataId] = nombre;
 
-      final votosSnap = await vinoDoc.reference.collection('votos').get();
-      votosPorVino[vinoId] = {
+      final votosSnap = await cataDoc.reference.collection('votos').get();
+      votosPorCata[cataId] = {
         for (var votoDoc in votosSnap.docs)
           votoDoc.id: Voto.fromJson(votoDoc.id, votoDoc.data()),
       };
     }
 
-    return (votosPorVino, nombresDeVino);
+    return (votosPorCata, nombresDeCata);
   }
 }
