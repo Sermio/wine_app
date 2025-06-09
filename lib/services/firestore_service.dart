@@ -1,3 +1,4 @@
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wine_app/models/elemento_cata.dart';
@@ -184,8 +185,10 @@ class FirestoreService extends ChangeNotifier {
     (
       Map<String, Map<String, Voto>>, // votos por elemento
       Map<String, String>, // nombres reales
+      Map<String, String>, // descripciones
       Map<String, String>, // nombres auxiliares
       Map<String, double>, // precios
+      Map<String, String>, // imagenes
     )
   >
   fetchResultadosConNombres(String cataId) async {
@@ -197,20 +200,31 @@ class FirestoreService extends ChangeNotifier {
 
     Map<String, Map<String, Voto>> votosPorElemento = {};
     Map<String, String> nombres = {};
+    Map<String, String> descripciones = {};
     Map<String, String> nombresAux = {};
     Map<String, double> precios = {};
+    Map<String, String> imagenes = {};
 
     for (var doc in elementosSnap.docs) {
       final elementoId = doc.id;
       final data = doc.data();
+
       final nombre = data['nombre'] ?? 'Elemento';
+      final descripcion = data['descripcion'] ?? '';
       final nombreAux = data['nombreAuxiliar'] ?? 'Elemento';
       final precio = (data['precio'] as num?)?.toDouble();
+      final imagenUrl = data['imagenUrl'] ?? '';
 
       nombres[elementoId] = nombre;
+      descripciones[elementoId] = descripcion;
       nombresAux[elementoId] = nombreAux;
+
       if (precio != null) {
         precios[elementoId] = precio;
+      }
+
+      if (imagenUrl.isNotEmpty) {
+        imagenes[elementoId] = imagenUrl;
       }
 
       final votosSnap = await doc.reference.collection('votos').get();
@@ -220,6 +234,42 @@ class FirestoreService extends ChangeNotifier {
       };
     }
 
-    return (votosPorElemento, nombres, nombresAux, precios);
+    return (
+      votosPorElemento,
+      nombres,
+      descripciones,
+      nombresAux,
+      precios,
+      imagenes,
+    );
+  }
+
+  Future<String?> getImagenUrl(String elementoId) async {
+    try {
+      final ref = FirebaseStorage.instance.ref('elementos/$elementoId.jpg');
+      return await ref.getDownloadURL();
+    } on FirebaseException catch (e) {
+      if (e.code == 'object-not-found') {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, Voto>> fetchVotosDeElemento(
+    String votacionId,
+    String elementoId,
+  ) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('catas')
+        .doc(votacionId)
+        .collection('elementos')
+        .doc(elementoId)
+        .collection('votos')
+        .get();
+
+    return {
+      for (var doc in snapshot.docs) doc.id: Voto.fromJson(doc.id, doc.data()),
+    };
   }
 }

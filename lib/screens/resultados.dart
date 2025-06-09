@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:wine_app/models/voto.dart';
+import 'package:wine_app/screens/resultados_detail.dart';
 import 'package:wine_app/services/firestore_service.dart';
 import 'package:wine_app/utils/styles.dart';
 
@@ -44,9 +45,11 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
           FutureBuilder<
             (
               Map<String, Map<String, Voto>>, // elementoId → userId → Voto
-              Map<String, String>, // elementoId → nombre
-              Map<String, String>, // elementoId → nombreAuxiliar
-              Map<String, double>, // elementoId → precio
+              Map<String, String>, // nombre
+              Map<String, String>, // descripcion
+              Map<String, String>, // nombreAux
+              Map<String, double>, // precio
+              Map<String, String>, // imagenUrl
             )
           >(
             future: firestore.fetchResultadosConNombres(widget.votacionId),
@@ -55,8 +58,15 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              final (votosPorElemento, nombres, nombresAux, precios) =
-                  snapshot.data!;
+              final (
+                votosPorElemento,
+                nombres,
+                descripciones,
+                nombresAux,
+                precios,
+                imagenes,
+              ) = snapshot.data!;
+
               final elementoIds = votosPorElemento.keys.toList()
                 ..sort((a, b) {
                   final auxA = nombresAux[a] ?? '';
@@ -140,74 +150,110 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                       final media = medias[elementoId]!;
 
                       final nombreReal = nombres[elementoId] ?? 'Elemento';
+                      final descripcion = descripciones[elementoId] ?? '';
                       final precio = precios[elementoId];
                       final nombreAux = nombresAux[elementoId] ?? 'Elemento';
+                      final imagenUrl = imagenes[elementoId] ?? '';
 
                       final nombreMostrar = mostrarNombres
                           ? '$nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
                           : nombreAux;
 
-                      return Card(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        color: Colors.white,
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                nombreMostrar,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ElementoDetalleScreen(
+                                votacionId: widget.votacionId,
+                                elementoId: elementoId,
+                                nombre: nombreReal,
+                                precio: precio,
+                                descripcion: descripcion,
+                                imagenUrl: imagenUrl,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Card(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          color: Colors.white,
+                          margin: const EdgeInsets.symmetric(vertical: 8),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  nombreMostrar,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 8),
-                              Row(
-                                children: [
-                                  const Icon(Icons.star, color: Colors.amber),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Media: ${media.toStringAsFixed(1)} / 10',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w500,
+
+                                const SizedBox(height: 12),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.star, color: Colors.amber),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Media: ${media.toStringAsFixed(1)} / 10',
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500,
+                                      ),
                                     ),
-                                  ),
-                                ],
-                              ),
-                              const Divider(height: 20),
-                              ...usuarioList.map((uid) {
-                                final voto = votos[uid];
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 4,
-                                  ),
-                                  child: Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        nombresUsuarios[uid] ?? uid,
-                                        style: const TextStyle(fontSize: 14),
-                                      ),
-                                      Text(
-                                        voto != null
-                                            ? voto.puntuacion.toStringAsFixed(1)
-                                            : '-',
-                                        style: const TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
+                                  ],
+                                ),
+                                const Divider(height: 20),
+                                ...List.generate(usuarioList.length * 2 - 1, (
+                                  i,
+                                ) {
+                                  if (i.isOdd) {
+                                    return const Divider(
+                                      height: 1,
+                                      thickness: 0.5,
+                                      color: Colors.grey,
+                                    );
+                                  }
+
+                                  final index = i ~/ 2;
+                                  final uid = usuarioList[index];
+                                  final voto = votos[uid];
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 4,
+                                    ),
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          nombresUsuarios[uid] ?? uid,
+                                          style: const TextStyle(fontSize: 14),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }),
-                            ],
+                                        Text(
+                                          voto != null
+                                              ? voto.puntuacion.toStringAsFixed(
+                                                  1,
+                                                )
+                                              : '-',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
                           ),
                         ),
                       );
