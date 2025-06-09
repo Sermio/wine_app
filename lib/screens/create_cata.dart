@@ -7,6 +7,8 @@ import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/services/firestore_service.dart';
 import 'package:wine_app/utils/styles.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class CreateCataScreen extends StatefulWidget {
   const CreateCataScreen({super.key});
@@ -120,6 +122,8 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                   context,
                   index,
                   onRemove: () => setState(() => _elementos.removeAt(index)),
+                  onUpdate: () =>
+                      setState(() {}), // <- Esto hace que se redibuje
                 );
               }),
               const SizedBox(height: 20),
@@ -186,7 +190,7 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                             nombre: v.nombre.text,
                             descripcion: v.descripcion.text,
                             precio: double.tryParse(v.precio.text) ?? 0,
-                            imagenUrl: v.imagenPath ?? '',
+                            imagenUrl: v.imagenUrl ?? '',
                           ),
                         );
                       }
@@ -256,10 +260,14 @@ class _ElementoCataInput {
   final descripcion = TextEditingController();
   final precio = TextEditingController();
   String? imagenPath;
+  String? imagenUrl;
+  bool isUploading = false;
 
   bool showNombreError = false;
   bool showDescripcionError = false;
   bool showPrecioError = false;
+
+  final ImagePicker _picker = ImagePicker();
 
   void validate() {
     showNombreError = nombre.text.trim().isEmpty;
@@ -269,7 +277,43 @@ class _ElementoCataInput {
 
   bool isValid() => !showNombreError && !showPrecioError;
 
-  Widget build(BuildContext context, int index, {VoidCallback? onRemove}) {
+  Future<void> _selectAndUploadImage(
+    BuildContext context,
+    String elementoId,
+    VoidCallback onUpdate,
+  ) async {
+    final pickedFile = await _picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 70,
+    );
+    if (pickedFile != null) {
+      isUploading = true;
+      onUpdate(); // muestra loader
+
+      final file = File(pickedFile.path);
+      final ref = FirebaseStorage.instance.ref().child(
+        'elementos/$elementoId.jpg',
+      );
+      final uploadTask = ref.putFile(file);
+      final snapshot = await uploadTask;
+      final url = await snapshot.ref.getDownloadURL();
+
+      imagenPath = file.path;
+      imagenUrl = url;
+
+      isUploading = false;
+      onUpdate(); // redibuja imagen
+    }
+  }
+
+  Widget build(
+    BuildContext context,
+    int index, {
+    VoidCallback? onRemove,
+    VoidCallback? onUpdate,
+  }) {
+    final elementoId = const Uuid().v4();
+
     return Card(
       color: Colors.white,
       margin: const EdgeInsets.symmetric(vertical: 8),
@@ -302,11 +346,7 @@ class _ElementoCataInput {
               errorText: showNombreError ? 'Campo obligatorio' : null,
             ),
             const SizedBox(height: 8),
-            _styledField(
-              controller: descripcion,
-              label: 'Descripción',
-              errorText: showDescripcionError ? 'Campo obligatorio' : null,
-            ),
+            _styledField(controller: descripcion, label: 'Descripción'),
             const SizedBox(height: 8),
             _styledField(
               controller: precio,
@@ -314,7 +354,34 @@ class _ElementoCataInput {
               keyboardType: TextInputType.number,
               errorText: showPrecioError ? 'Introduce un número válido' : null,
             ),
-            if (imagenPath != null)
+            const SizedBox(height: 8),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await _selectAndUploadImage(
+                  context,
+                  elementoId,
+                  onUpdate ?? () {},
+                );
+                if (onUpdate != null) onUpdate();
+              },
+              icon: const Icon(Icons.upload),
+              label: const Text('Subir imagen'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: textColor,
+              ),
+            ),
+            if (isUploading)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: SizedBox(
+                  height: 100,
+                  child: Center(
+                    child: CircularProgressIndicator(color: primaryColor),
+                  ),
+                ),
+              )
+            else if (imagenPath != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Image.file(
