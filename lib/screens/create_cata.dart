@@ -282,13 +282,37 @@ class _ElementoCataInput {
     String elementoId,
     VoidCallback onUpdate,
   ) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.camera_alt),
+            title: const Text('Tomar foto'),
+            onTap: () => Navigator.pop(context, ImageSource.camera),
+          ),
+          ListTile(
+            leading: const Icon(Icons.photo),
+            title: const Text('Seleccionar de galería'),
+            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          ),
+        ],
+      ),
+    );
+
+    if (source == null) return;
+
     final pickedFile = await _picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 70,
     );
     if (pickedFile != null) {
       isUploading = true;
-      onUpdate(); // muestra loader
+      onUpdate();
 
       final file = File(pickedFile.path);
       final ref = FirebaseStorage.instance.ref().child(
@@ -302,7 +326,7 @@ class _ElementoCataInput {
       imagenUrl = url;
 
       isUploading = false;
-      onUpdate(); // redibuja imagen
+      onUpdate();
     }
   }
 

@@ -25,13 +25,29 @@ class FirestoreService extends ChangeNotifier {
 
     final elementos = await cataRef.collection('elementos').get();
     for (var elemento in elementos.docs) {
+      // Eliminar imagen del Storage si existe
+      final data = elemento.data();
+      final imagenUrl = data['imagenUrl'] as String?;
+      if (imagenUrl != null && imagenUrl.isNotEmpty) {
+        try {
+          final ref = FirebaseStorage.instance.refFromURL(imagenUrl);
+          await ref.delete();
+        } catch (e) {
+          print('Error al eliminar imagen: $e');
+        }
+      }
+
+      // Eliminar votos del elemento
       final votos = await elemento.reference.collection('votos').get();
       for (var voto in votos.docs) {
         await voto.reference.delete();
       }
+
+      // Eliminar el documento del elemento
       await elemento.reference.delete();
     }
 
+    // Eliminar el documento de la cata
     await cataRef.delete();
     notifyListeners();
   }
