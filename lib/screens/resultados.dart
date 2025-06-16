@@ -210,48 +210,61 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                                   ],
                                 ),
                                 const Divider(height: 20),
-                                ...List.generate(usuarioList.length * 2 - 1, (
-                                  i,
-                                ) {
-                                  if (i.isOdd) {
-                                    return const Divider(
-                                      height: 1,
-                                      thickness: 0.5,
-                                      color: Colors.grey,
-                                    );
-                                  }
-
-                                  final index = i ~/ 2;
-                                  final uid = usuarioList[index];
-                                  final voto = votos[uid];
-
-                                  return Padding(
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 4,
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          nombresUsuarios[uid] ?? uid,
-                                          style: const TextStyle(fontSize: 14),
-                                        ),
-                                        Text(
-                                          voto != null
-                                              ? voto.puntuacion.toStringAsFixed(
-                                                  1,
-                                                )
-                                              : '-',
-                                          style: const TextStyle(
+                                ...usuarioList.isEmpty
+                                    ? [
+                                        const Text(
+                                          'Sin votos de usuarios',
+                                          style: TextStyle(
                                             fontSize: 14,
-                                            fontWeight: FontWeight.bold,
+                                            fontStyle: FontStyle.italic,
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  );
-                                }),
+                                      ]
+                                    : List.generate(
+                                        usuarioList.length * 2 - 1,
+                                        (i) {
+                                          if (i.isOdd) {
+                                            return const Divider(
+                                              height: 1,
+                                              thickness: 0.5,
+                                              color: Colors.grey,
+                                            );
+                                          }
+
+                                          final index = i ~/ 2;
+                                          final uid = usuarioList[index];
+                                          final voto = votos[uid];
+
+                                          return Padding(
+                                            padding: const EdgeInsets.symmetric(
+                                              vertical: 4,
+                                            ),
+                                            child: Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                Text(
+                                                  nombresUsuarios[uid] ?? uid,
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  voto != null
+                                                      ? voto.puntuacion
+                                                            .toStringAsFixed(1)
+                                                      : '-',
+                                                  style: const TextStyle(
+                                                    fontSize: 14,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        },
+                                      ),
                               ],
                             ),
                           ),
