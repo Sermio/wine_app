@@ -284,23 +284,42 @@ class _ElementoCataInput {
   ) async {
     final source = await showModalBottomSheet<ImageSource>(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.camera_alt),
-            title: const Text('Tomar foto'),
-            onTap: () => Navigator.pop(context, ImageSource.camera),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
           ),
-          ListTile(
-            leading: const Icon(Icons.photo),
-            title: const Text('Seleccionar de galería'),
-            onTap: () => Navigator.pop(context, ImageSource.gallery),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Barra de agarre
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Tomar foto'),
+                onTap: () => Navigator.pop(context, ImageSource.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo),
+                title: const Text('Seleccionar de galería'),
+                onTap: () => Navigator.pop(context, ImageSource.gallery),
+              ),
+              const SizedBox(height: 16),
+            ],
           ),
-        ],
+        ),
       ),
     );
 
