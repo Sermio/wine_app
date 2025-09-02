@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -282,46 +283,54 @@ class _ElementoCataInput {
     String elementoId,
     VoidCallback onUpdate,
   ) async {
-    final source = await showModalBottomSheet<ImageSource>(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Barra de agarre
-              Container(
-                margin: const EdgeInsets.symmetric(vertical: 8),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+    ImageSource? source;
+
+    if (kIsWeb) {
+      // En web solo permitimos seleccionar de galería
+      source = ImageSource.gallery;
+    } else {
+      // En móvil mostramos opciones
+      source = await showModalBottomSheet<ImageSource>(
+        context: context,
+        isScrollControlled: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        ),
+        builder: (context) => SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).viewInsets.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Barra de agarre
+                Container(
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Tomar foto'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo),
-                title: const Text('Seleccionar de galería'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              const SizedBox(height: 16),
-            ],
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text('Tomar foto'),
+                  onTap: () => Navigator.pop(context, ImageSource.camera),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo),
+                  title: const Text('Seleccionar de galería'),
+                  onTap: () => Navigator.pop(context, ImageSource.gallery),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
           ),
         ),
-      ),
-    );
+      );
+    }
 
     if (source == null) return;
 
@@ -333,19 +342,43 @@ class _ElementoCataInput {
       isUploading = true;
       onUpdate();
 
-      final file = File(pickedFile.path);
-      final ref = FirebaseStorage.instance.ref().child(
-        'elementos/$elementoId.jpg',
-      );
-      final uploadTask = ref.putFile(file);
-      final snapshot = await uploadTask;
-      final url = await snapshot.ref.getDownloadURL();
+      try {
+        if (kIsWeb) {
+          // Para web, usar putData en lugar de putFile
+          final bytes = await pickedFile.readAsBytes();
+          final ref = FirebaseStorage.instance.ref().child(
+            'elementos/$elementoId.jpg',
+          );
+          final uploadTask = ref.putData(bytes);
+          final snapshot = await uploadTask;
+          final url = await snapshot.ref.getDownloadURL();
 
-      imagenPath = file.path;
-      imagenUrl = url;
+          imagenUrl = url;
+        } else {
+          // Para móvil, usar putFile
+          final file = File(pickedFile.path);
+          final ref = FirebaseStorage.instance.ref().child(
+            'elementos/$elementoId.jpg',
+          );
+          final uploadTask = ref.putFile(file);
+          final snapshot = await uploadTask;
+          final url = await snapshot.ref.getDownloadURL();
 
-      isUploading = false;
-      onUpdate();
+          imagenPath = file.path;
+          imagenUrl = url;
+        }
+
+        isUploading = false;
+        onUpdate();
+      } catch (e) {
+        isUploading = false;
+        onUpdate();
+        if (context.mounted) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Error al subir imagen: $e')));
+        }
+      }
     }
   }
 
