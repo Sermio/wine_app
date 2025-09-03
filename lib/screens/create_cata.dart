@@ -343,13 +343,29 @@ class _ElementoCataInput {
       onUpdate();
 
       try {
+        // Verificar que el usuario esté autenticado
+        final auth = Provider.of<AuthService>(context, listen: false);
+        if (auth.currentUser == null) {
+          throw Exception('Usuario no autenticado');
+        }
+
         if (kIsWeb) {
           // Para web, usar putData en lugar de putFile
           final bytes = await pickedFile.readAsBytes();
           final ref = FirebaseStorage.instance.ref().child(
             'elementos/$elementoId.jpg',
           );
-          final uploadTask = ref.putData(bytes);
+
+          // Agregar metadata para mejor compatibilidad
+          final metadata = SettableMetadata(
+            contentType: 'image/jpeg',
+            customMetadata: {
+              'uploadedBy': auth.currentUser!.uid,
+              'uploadedAt': DateTime.now().toIso8601String(),
+            },
+          );
+
+          final uploadTask = ref.putData(bytes, metadata);
           final snapshot = await uploadTask;
           final url = await snapshot.ref.getDownloadURL();
 
@@ -360,7 +376,17 @@ class _ElementoCataInput {
           final ref = FirebaseStorage.instance.ref().child(
             'elementos/$elementoId.jpg',
           );
-          final uploadTask = ref.putFile(file);
+
+          // Agregar metadata para mejor compatibilidad
+          final metadata = SettableMetadata(
+            contentType: 'image/jpeg',
+            customMetadata: {
+              'uploadedBy': auth.currentUser!.uid,
+              'uploadedAt': DateTime.now().toIso8601String(),
+            },
+          );
+
+          final uploadTask = ref.putFile(file, metadata);
           final snapshot = await uploadTask;
           final url = await snapshot.ref.getDownloadURL();
 
@@ -370,14 +396,28 @@ class _ElementoCataInput {
 
         isUploading = false;
         onUpdate();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Imagen subida correctamente'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       } catch (e) {
         isUploading = false;
         onUpdate();
         if (context.mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Error al subir imagen: $e')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al subir imagen: $e'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 5),
+            ),
+          );
         }
+        print('Error detallado al subir imagen: $e');
       }
     }
   }
@@ -431,20 +471,41 @@ class _ElementoCataInput {
               errorText: showPrecioError ? 'Introduce un número válido' : null,
             ),
             const SizedBox(height: 8),
+            // Botón dinámico: Subir imagen o Eliminar imagen
             ElevatedButton.icon(
               onPressed: () async {
-                await _selectAndUploadImage(
-                  context,
-                  elementoId,
-                  onUpdate ?? () {},
-                );
-                if (onUpdate != null) onUpdate();
+                if (imagenUrl != null || imagenPath != null) {
+                  // Si hay imagen, eliminar
+                  imagenUrl = null;
+                  imagenPath = null;
+                  onUpdate?.call();
+                } else {
+                  // Si no hay imagen, subir
+                  await _selectAndUploadImage(
+                    context,
+                    elementoId,
+                    onUpdate ?? () {},
+                  );
+                  if (onUpdate != null) onUpdate();
+                }
               },
-              icon: const Icon(Icons.upload),
-              label: const Text('Subir imagen'),
+              icon: Icon(
+                imagenUrl != null || imagenPath != null
+                    ? Icons.delete
+                    : Icons.upload,
+              ),
+              label: Text(
+                imagenUrl != null || imagenPath != null
+                    ? 'Eliminar imagen'
+                    : 'Subir imagen',
+              ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: primaryColor,
-                foregroundColor: textColor,
+                backgroundColor: imagenUrl != null || imagenPath != null
+                    ? Colors.red
+                    : primaryColor,
+                foregroundColor: imagenUrl != null || imagenPath != null
+                    ? Colors.white
+                    : textColor,
               ),
             ),
             if (isUploading)
@@ -457,13 +518,98 @@ class _ElementoCataInput {
                   ),
                 ),
               )
+            else if (imagenUrl != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  children: [
+                    // Preview de la imagen
+                    GestureDetector(
+                      onTap: () => _showImageModal(context, imagenUrl!),
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          minHeight: 80,
+                          maxHeight: 120,
+                        ),
+                        child: Image.network(
+                          imagenUrl!,
+                          fit: BoxFit.contain,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              constraints: const BoxConstraints(
+                                minHeight: 80,
+                                maxHeight: 120,
+                              ),
+                              color: Colors.grey[200],
+                              child: const Center(
+                                child: CircularProgressIndicator(
+                                  color: primaryColor,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error cargando imagen: $error');
+                            print('URL de imagen: $imagenUrl');
+                            return Container(
+                              constraints: const BoxConstraints(
+                                minHeight: 80,
+                                maxHeight: 120,
+                              ),
+                              color: Colors.grey[300],
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.error, color: Colors.red),
+                                  const SizedBox(height: 4),
+                                  const Text(
+                                    'Error al cargar imagen',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: Colors.red,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  ElevatedButton(
+                                    onPressed: () async {
+                                      // Intentar recargar la imagen
+                                      onUpdate?.call();
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: primaryColor,
+                                      foregroundColor: textColor,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Reintentar',
+                                      style: TextStyle(fontSize: 10),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
             else if (imagenPath != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Image.file(
-                  File(imagenPath!),
-                  height: 100,
-                  fit: BoxFit.cover,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.file(
+                    File(imagenPath!),
+                    height: 100,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
                 ),
               ),
           ],
@@ -489,6 +635,136 @@ class _ElementoCataInput {
         filled: true,
         fillColor: Colors.white,
       ),
+    );
+  }
+
+  void _showImageModal(BuildContext context, String imageUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        final screenSize = MediaQuery.of(context).size;
+        final isWeb = screenSize.width > 768;
+
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          insetPadding: isWeb
+              ? const EdgeInsets.all(40) // Más espacio en web
+              : const EdgeInsets.all(20), // Menos espacio en móvil
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 20,
+                  spreadRadius: 5,
+                ),
+              ],
+            ),
+            child: Stack(
+              children: [
+                // Contenido principal
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Título
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'Vista previa de imagen',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Cerrar',
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Imagen con zoom
+                      Container(
+                        constraints: BoxConstraints(
+                          maxHeight: isWeb
+                              ? screenSize.height *
+                                    0.7 // Más grande en web
+                              : screenSize.height * 0.6, // Más pequeño en móvil
+                          maxWidth: isWeb
+                              ? screenSize.width *
+                                    0.8 // Más ancho en web
+                              : screenSize.width * 0.9, // Más estrecho en móvil
+                        ),
+                        child: InteractiveViewer(
+                          minScale: 0.5,
+                          maxScale: isWeb ? 5.0 : 3.0, // Más zoom en web
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              imageUrl,
+                              fit: BoxFit.contain,
+                              loadingBuilder:
+                                  (context, child, loadingProgress) {
+                                    if (loadingProgress == null) return child;
+                                    return Container(
+                                      height: 200,
+                                      color: Colors.grey[200],
+                                      child: const Center(
+                                        child: CircularProgressIndicator(
+                                          color: primaryColor,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                              errorBuilder: (context, error, stackTrace) {
+                                return Container(
+                                  height: 200,
+                                  color: Colors.grey[300],
+                                  child: const Center(
+                                    child: Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.error,
+                                          color: Colors.red,
+                                          size: 48,
+                                        ),
+                                        SizedBox(height: 8),
+                                        Text('Error al cargar la imagen'),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      // Instrucciones
+                      Text(
+                        isWeb
+                            ? 'Usa la rueda del ratón o Ctrl + scroll para hacer zoom'
+                            : 'Pellizca para hacer zoom',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
