@@ -96,3 +96,4 @@ Una vez desplegada, la aplicación estará disponible en:
 Los usuarios de iOS pueden acceder a la aplicación a través del navegador Safari o cualquier otro navegador web.
 
 
+
