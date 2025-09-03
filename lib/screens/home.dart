@@ -70,12 +70,15 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Catas', style: TextStyle(color: textColor)),
+        title: const Text('Catas', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: shadowColor,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            color: textColor,
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await auth.signOut();
@@ -182,7 +185,7 @@ class HomeScreen extends StatelessWidget {
             context,
           ).push(MaterialPageRoute(builder: (_) => const CreateCataScreen()));
         },
-        child: const Icon(Icons.add, color: textColor),
+        child: const Icon(Icons.add, color: Colors.white),
       ),
     );
   }
