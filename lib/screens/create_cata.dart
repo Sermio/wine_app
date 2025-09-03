@@ -34,13 +34,16 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Nueva cata'),
+        title: const Text('Nueva cata', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
-        foregroundColor: textColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: shadowColor,
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(spacingM),
         child: Form(
           key: _formKey,
           child: Column(
@@ -63,37 +66,44 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                 child: Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 16,
+                    horizontal: spacingM,
+                    vertical: spacingM,
                   ),
-                  margin: const EdgeInsets.only(bottom: 8),
+                  margin: const EdgeInsets.only(bottom: spacingS),
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                    color: surfaceColor,
+                    borderRadius: BorderRadius.circular(radiusM),
                     border: Border.all(
-                      color: fechaObligatoria
-                          ? Colors.red
-                          : Colors.grey.shade400,
+                      color: fechaObligatoria ? errorColor : dividerColor,
                       width: 1.5,
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: shadowColor,
+                        blurRadius: elevationS,
+                        offset: const Offset(0, 1),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.calendar_today,
-                        color: fechaObligatoria ? Colors.red : textColor,
+                        color: fechaObligatoria ? errorColor : primaryColor,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: spacingM),
                       Text(
                         _fecha == null
                             ? 'Seleccionar fecha'
                             : _fecha!.toLocal().toString().split(' ')[0],
                         style: TextStyle(
-                          color: fechaObligatoria ? Colors.red : textColor,
+                          color: fechaObligatoria
+                              ? errorColor
+                              : textPrimaryColor,
                           fontSize: 16,
                           fontWeight: _fecha == null
                               ? FontWeight.normal
-                              : FontWeight.bold,
+                              : FontWeight.w600,
                         ),
                       ),
                     ],
@@ -112,10 +122,10 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'La fecha es obligatoria',
-                    style: TextStyle(color: Colors.red, fontSize: 12),
+                    style: TextStyle(color: errorColor, fontSize: 12),
                   ),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: spacingM),
               ..._elementos.asMap().entries.map((entry) {
                 final index = entry.key;
                 final elemento = entry.value;
@@ -127,22 +137,24 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                       setState(() {}), // <- Esto hace que se redibuje
                 );
               }),
-              const SizedBox(height: 20),
+              const SizedBox(height: spacingL),
               FloatingActionButton(
                 backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                elevation: elevationM,
                 onPressed: () =>
                     setState(() => _elementos.add(_ElementoCataInput())),
-                child: const Icon(Icons.add, color: textColor),
+                child: const Icon(Icons.add),
               ),
               if (!elementosValidos)
                 const Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Debe haber al menos un elemento válido',
-                    style: TextStyle(color: Colors.red),
+                    style: TextStyle(color: errorColor),
                   ),
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: spacingL),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -219,15 +231,13 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    padding: const EdgeInsets.symmetric(vertical: spacingM),
+                    elevation: elevationM,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(radiusM),
                     ),
                   ),
-                  child: const Text(
-                    'Crear cata',
-                    style: TextStyle(color: textColor),
-                  ),
+                  child: const Text('Crear cata', style: buttonTextStyle),
                 ),
               ),
             ],
@@ -244,12 +254,33 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
   }) {
     return TextFormField(
       controller: controller,
+      style: bodyLargeStyle,
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: TextStyle(color: textColor),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: TextStyle(color: textSecondaryColor),
+        hintStyle: TextStyle(color: textLightColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: dividerColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: dividerColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: primaryColor, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: errorColor),
+        ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surfaceColor,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: spacingM,
+          vertical: spacingM,
+        ),
       ),
       validator: validator,
     );
@@ -430,47 +461,41 @@ class _ElementoCataInput {
   }) {
     final elementoId = const Uuid().v4();
 
-    return Card(
-      color: Colors.white,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: spacingS),
+      decoration: cardDecoration,
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(spacingM),
         child: Column(
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Elemento ${index + 1}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                Text('Elemento ${index + 1}', style: heading3Style),
                 if (onRemove != null)
                   IconButton(
-                    icon: const Icon(Icons.remove_circle, color: primaryColor),
+                    icon: const Icon(Icons.remove_circle, color: errorColor),
                     onPressed: onRemove,
+                    tooltip: 'Eliminar elemento',
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: spacingS),
             _styledField(
               controller: nombre,
               label: 'Nombre',
               errorText: showNombreError ? 'Campo obligatorio' : null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: spacingS),
             _styledField(controller: descripcion, label: 'Descripción'),
-            const SizedBox(height: 8),
+            const SizedBox(height: spacingS),
             _styledField(
               controller: precio,
               label: 'Precio (€)',
               keyboardType: TextInputType.number,
               errorText: showPrecioError ? 'Introduce un número válido' : null,
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: spacingS),
             // Botón dinámico: Subir imagen o Eliminar imagen
             ElevatedButton.icon(
               onPressed: () async {
@@ -501,16 +526,18 @@ class _ElementoCataInput {
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: imagenUrl != null || imagenPath != null
-                    ? Colors.red
+                    ? errorColor
                     : primaryColor,
-                foregroundColor: imagenUrl != null || imagenPath != null
-                    ? Colors.white
-                    : textColor,
+                foregroundColor: Colors.white,
+                elevation: elevationS,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radiusS),
+                ),
               ),
             ),
             if (isUploading)
               const Padding(
-                padding: EdgeInsets.only(top: 8),
+                padding: EdgeInsets.only(top: spacingS),
                 child: SizedBox(
                   height: 100,
                   child: Center(
@@ -520,7 +547,7 @@ class _ElementoCataInput {
               )
             else if (imagenUrl != null)
               Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: spacingS),
                 child: Column(
                   children: [
                     // Preview de la imagen
@@ -601,9 +628,9 @@ class _ElementoCataInput {
               )
             else if (imagenPath != null)
               Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding: const EdgeInsets.only(top: spacingS),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(radiusS),
                   child: Image.file(
                     File(imagenPath!),
                     height: 100,
@@ -627,13 +654,34 @@ class _ElementoCataInput {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      style: bodyLargeStyle,
       decoration: InputDecoration(
         labelText: label,
         errorText: errorText,
-        labelStyle: TextStyle(color: textColor),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: TextStyle(color: textSecondaryColor),
+        hintStyle: TextStyle(color: textLightColor),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: dividerColor),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: dividerColor),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: primaryColor, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(radiusM),
+          borderSide: BorderSide(color: errorColor),
+        ),
         filled: true,
-        fillColor: Colors.white,
+        fillColor: surfaceColor,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: spacingM,
+          vertical: spacingM,
+        ),
       ),
     );
   }
@@ -678,8 +726,9 @@ class _ElementoCataInput {
                           const Text(
                             'Vista previa de imagen',
                             style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
+                              fontSize: 20,
+                              fontWeight: FontWeight.w600,
+                              color: textPrimaryColor,
                             ),
                           ),
                           IconButton(

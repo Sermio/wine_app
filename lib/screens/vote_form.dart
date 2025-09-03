@@ -154,10 +154,10 @@ class _VoteFormState extends State<VoteForm> {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text('Votar', style: TextStyle(color: textColor)),
+                const Text('Votar', style: TextStyle(color: Colors.white)),
                 if (votoRegistrado) ...[
                   const SizedBox(width: 8),
-                  const Icon(Icons.check, color: textColor),
+                  const Icon(Icons.check, color: Colors.white),
                 ],
               ],
             ),
