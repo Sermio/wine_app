@@ -39,7 +39,12 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
         foregroundColor: textColor,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          100,
+        ), // Padding inferior para evitar solapamiento
         child: Form(
           key: _formKey,
           child: Column(
