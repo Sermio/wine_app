@@ -16,11 +16,70 @@ class ResultadosScreen extends StatefulWidget {
 class _ResultadosScreenState extends State<ResultadosScreen> {
   bool mostrarNombres = false;
   bool ordenarPorMedia = false;
+  bool _isLoading = true;
+  Map<String, Map<String, Voto>>? _votosPorElemento;
+  Map<String, String>? _nombres;
+  Map<String, String>? _descripciones;
+  Map<String, String>? _nombresAux;
+  Map<String, double>? _precios;
+  Map<String, String>? _imagenes;
+  Map<String, String>? _nombresUsuarios;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final firestore = Provider.of<FirestoreService>(context, listen: false);
+
+    try {
+      // Cargar datos de resultados
+      final (
+        votosPorElemento,
+        nombres,
+        descripciones,
+        nombresAux,
+        precios,
+        imagenes,
+      ) = await firestore.fetchResultadosConNombres(
+        widget.votacionId,
+      );
+
+      // Obtener usuarios únicos
+      final usuarios = <String>{};
+      for (var votos in votosPorElemento.values) {
+        usuarios.addAll(votos.keys);
+      }
+
+      // Cargar nombres de usuarios
+      final nombresUsuarios = await firestore.fetchNombresUsuarios(usuarios);
+
+      if (mounted) {
+        setState(() {
+          _votosPorElemento = votosPorElemento;
+          _nombres = nombres;
+          _descripciones = descripciones;
+          _nombresAux = nombresAux;
+          _precios = precios;
+          _imagenes = imagenes;
+          _nombresUsuarios = nombresUsuarios;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+      print('Error al cargar datos: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final firestore = Provider.of<FirestoreService>(context, listen: false);
-
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
@@ -41,241 +100,217 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
           ),
         ],
       ),
-      body:
-          FutureBuilder<
-            (
-              Map<String, Map<String, Voto>>, // elementoId → userId → Voto
-              Map<String, String>, // nombre
-              Map<String, String>, // descripcion
-              Map<String, String>, // nombreAux
-              Map<String, double>, // precio
-              Map<String, String>, // imagenUrl
-            )
-          >(
-            future: firestore.fetchResultadosConNombres(widget.votacionId),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
+      body: _buildBody(),
+    );
+  }
 
-              final (
-                votosPorElemento,
-                nombres,
-                descripciones,
-                nombresAux,
-                precios,
-                imagenes,
-              ) = snapshot.data!;
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-              final elementoIds = votosPorElemento.keys.toList()
-                ..sort((a, b) {
-                  final auxA = nombresAux[a] ?? '';
-                  final auxB = nombresAux[b] ?? '';
-                  return auxA.compareTo(auxB);
+    if (_votosPorElemento == null || _nombresUsuarios == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error, size: 64, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
+              'Error al cargar resultados',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: _loadData,
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final elementoIds = _votosPorElemento!.keys.toList()
+      ..sort((a, b) {
+        final auxA = _nombresAux![a] ?? '';
+        final auxB = _nombresAux![b] ?? '';
+        return auxA.compareTo(auxB);
+      });
+
+    final usuarios = <String>{};
+    for (var votos in _votosPorElemento!.values) {
+      usuarios.addAll(votos.keys);
+    }
+
+    final usuarioList = usuarios.toList();
+
+    final medias = <String, double>{};
+    for (var elementoId in elementoIds) {
+      final puntuaciones = _votosPorElemento![elementoId]!.values
+          .map((v) => v.puntuacion)
+          .toList();
+      medias[elementoId] = puntuaciones.isNotEmpty
+          ? puntuaciones.reduce((a, b) => a + b) / puntuaciones.length
+          : 0;
+    }
+
+    final sortedElementoIds = [...elementoIds];
+    if (ordenarPorMedia) {
+      sortedElementoIds.sort((a, b) => medias[b]!.compareTo(medias[a]!));
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: sortedElementoIds.length + 1,
+      itemBuilder: (context, index) {
+        if (index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: primaryColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: Icon(
+                mostrarNombres ? Icons.visibility_off : Icons.visibility,
+                color: textColor,
+              ),
+              label: Text(
+                mostrarNombres
+                    ? 'Ocultar nombres reales'
+                    : 'Mostrar nombres reales',
+                style: const TextStyle(color: textColor),
+              ),
+              onPressed: () {
+                setState(() {
+                  mostrarNombres = !mostrarNombres;
                 });
+              },
+            ),
+          );
+        }
 
-              final usuarios = <String>{};
-              for (var votos in votosPorElemento.values) {
-                usuarios.addAll(votos.keys);
-              }
+        final realIndex = index - 1;
+        final elementoId = sortedElementoIds[realIndex];
+        final votos = _votosPorElemento![elementoId]!;
+        final media = medias[elementoId]!;
 
-              return FutureBuilder<Map<String, String>>(
-                future: firestore.fetchNombresUsuarios(usuarios),
-                builder: (context, userSnap) {
-                  if (!userSnap.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
+        final nombreReal = _nombres![elementoId] ?? 'Elemento';
+        final descripcion = _descripciones![elementoId] ?? '';
+        final precio = _precios![elementoId];
+        final nombreAux = _nombresAux![elementoId] ?? 'Elemento';
+        final imagenUrl = _imagenes![elementoId] ?? '';
 
-                  final nombresUsuarios = userSnap.data!;
-                  final usuarioList = usuarios.toList();
+        final nombreMostrar = mostrarNombres
+            ? '$nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
+            : nombreAux;
 
-                  final medias = <String, double>{};
-                  for (var elementoId in elementoIds) {
-                    final puntuaciones = votosPorElemento[elementoId]!.values
-                        .map((v) => v.puntuacion)
-                        .toList();
-                    medias[elementoId] = puntuaciones.isNotEmpty
-                        ? puntuaciones.reduce((a, b) => a + b) /
-                              puntuaciones.length
-                        : 0;
-                  }
+        return GestureDetector(
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ElementoDetalleScreen(
+                  votacionId: widget.votacionId,
+                  elementoId: elementoId,
+                  nombre: nombreReal,
+                  precio: precio,
+                  descripcion: descripcion,
+                  imagenUrl: imagenUrl,
+                ),
+              ),
+            );
+          },
+          child: Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            color: Colors.white,
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    nombreMostrar,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                    ),
+                  ),
 
-                  final sortedElementoIds = [...elementoIds];
-                  if (ordenarPorMedia) {
-                    sortedElementoIds.sort(
-                      (a, b) => medias[b]!.compareTo(medias[a]!),
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: sortedElementoIds.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: ElevatedButton.icon(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: primaryColor,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Icon(Icons.star, color: Colors.amber),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Media: ${media.toStringAsFixed(1)} / 10',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 20),
+                  ...usuarioList.isEmpty
+                      ? [
+                          const Text(
+                            'Sin votos de usuarios',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
                             ),
-                            icon: Icon(
-                              mostrarNombres
-                                  ? Icons.visibility_off
-                                  : Icons.visibility,
-                              color: textColor,
-                            ),
-                            label: Text(
-                              mostrarNombres
-                                  ? 'Ocultar nombres reales'
-                                  : 'Mostrar nombres reales',
-                              style: const TextStyle(color: textColor),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                mostrarNombres = !mostrarNombres;
-                              });
-                            },
                           ),
-                        );
-                      }
+                        ]
+                      : List.generate(usuarioList.length * 2 - 1, (i) {
+                          if (i.isOdd) {
+                            return const Divider(
+                              height: 1,
+                              thickness: 0.5,
+                              color: Colors.grey,
+                            );
+                          }
 
-                      final realIndex = index - 1;
-                      final elementoId = sortedElementoIds[realIndex];
-                      final votos = votosPorElemento[elementoId]!;
-                      final media = medias[elementoId]!;
+                          final index = i ~/ 2;
+                          final uid = usuarioList[index];
+                          final voto = votos[uid];
 
-                      final nombreReal = nombres[elementoId] ?? 'Elemento';
-                      final descripcion = descripciones[elementoId] ?? '';
-                      final precio = precios[elementoId];
-                      final nombreAux = nombresAux[elementoId] ?? 'Elemento';
-                      final imagenUrl = imagenes[elementoId] ?? '';
-
-                      final nombreMostrar = mostrarNombres
-                          ? '$nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
-                          : nombreAux;
-
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => ElementoDetalleScreen(
-                                votacionId: widget.votacionId,
-                                elementoId: elementoId,
-                                nombre: nombreReal,
-                                precio: precio,
-                                descripcion: descripcion,
-                                imagenUrl: imagenUrl,
-                              ),
-                            ),
-                          );
-                        },
-                        child: Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          color: Colors.white,
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.center,
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Text(
-                                  nombreMostrar,
-                                  textAlign: TextAlign.center,
+                                  _nombresUsuarios![uid] ?? uid,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                                Text(
+                                  voto != null
+                                      ? voto.puntuacion.toStringAsFixed(1)
+                                      : '-',
                                   style: const TextStyle(
+                                    fontSize: 14,
                                     fontWeight: FontWeight.bold,
-                                    fontSize: 18,
                                   ),
                                 ),
-
-                                const SizedBox(height: 12),
-                                Row(
-                                  children: [
-                                    const Icon(Icons.star, color: Colors.amber),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Media: ${media.toStringAsFixed(1)} / 10',
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const Divider(height: 20),
-                                ...usuarioList.isEmpty
-                                    ? [
-                                        const Text(
-                                          'Sin votos de usuarios',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontStyle: FontStyle.italic,
-                                          ),
-                                        ),
-                                      ]
-                                    : List.generate(
-                                        usuarioList.length * 2 - 1,
-                                        (i) {
-                                          if (i.isOdd) {
-                                            return const Divider(
-                                              height: 1,
-                                              thickness: 0.5,
-                                              color: Colors.grey,
-                                            );
-                                          }
-
-                                          final index = i ~/ 2;
-                                          final uid = usuarioList[index];
-                                          final voto = votos[uid];
-
-                                          return Padding(
-                                            padding: const EdgeInsets.symmetric(
-                                              vertical: 4,
-                                            ),
-                                            child: Row(
-                                              mainAxisAlignment:
-                                                  MainAxisAlignment
-                                                      .spaceBetween,
-                                              children: [
-                                                Text(
-                                                  nombresUsuarios[uid] ?? uid,
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  voto != null
-                                                      ? voto.puntuacion
-                                                            .toStringAsFixed(1)
-                                                      : '-',
-                                                  style: const TextStyle(
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        },
-                                      ),
                               ],
                             ),
-                          ),
-                        ),
-                      );
-                    },
-                  );
-                },
-              );
-            },
+                          );
+                        }),
+                ],
+              ),
+            ),
           ),
+        );
+      },
     );
   }
 }

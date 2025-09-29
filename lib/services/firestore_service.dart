@@ -103,18 +103,28 @@ class FirestoreService extends ChangeNotifier {
   }
 
   Future<Map<String, String>> fetchNombresUsuarios(Set<String> uids) async {
-    Map<String, String> nombres = {};
+    if (uids.isEmpty) return {};
 
-    for (var uid in uids) {
-      final doc = await _db.collection('usuarios').doc(uid).get();
-      if (doc.exists) {
-        nombres[uid] = doc.data()!['nombre'] ?? 'Desconocido';
-      } else {
-        nombres[uid] = 'Desconocido';
+    // Usar consultas en paralelo en lugar de secuenciales
+    final futures = uids.map((uid) async {
+      try {
+        final doc = await _db.collection('usuarios').doc(uid).get();
+        if (doc.exists && doc.data() != null) {
+          return MapEntry<String, String>(
+            uid,
+            doc.data()!['nombre'] ?? 'Desconocido',
+          );
+        } else {
+          return MapEntry<String, String>(uid, 'Desconocido');
+        }
+      } catch (e) {
+        print('Error al obtener usuario $uid: $e');
+        return MapEntry<String, String>(uid, 'Desconocido');
       }
-    }
+    });
 
-    return nombres;
+    final results = await Future.wait(futures);
+    return Map<String, String>.fromEntries(results);
   }
 
   Future<List<Cata>> fetchCatas() async {
@@ -221,6 +231,7 @@ class FirestoreService extends ChangeNotifier {
     Map<String, double> precios = {};
     Map<String, String> imagenes = {};
 
+    // Procesar datos de elementos primero
     for (var doc in elementosSnap.docs) {
       final elementoId = doc.id;
       final data = doc.data();
@@ -242,13 +253,24 @@ class FirestoreService extends ChangeNotifier {
       if (imagenUrl.isNotEmpty) {
         imagenes[elementoId] = imagenUrl;
       }
-
-      final votosSnap = await doc.reference.collection('votos').get();
-      votosPorElemento[elementoId] = {
-        for (var voto in votosSnap.docs)
-          voto.id: Voto.fromJson(voto.id, voto.data()),
-      };
     }
+
+    // Obtener votos en paralelo para todos los elementos
+    final votosFutures = elementosSnap.docs.map((doc) async {
+      try {
+        final votosSnap = await doc.reference.collection('votos').get();
+        return MapEntry(doc.id, {
+          for (var voto in votosSnap.docs)
+            voto.id: Voto.fromJson(voto.id, voto.data()),
+        });
+      } catch (e) {
+        print('Error al obtener votos para elemento ${doc.id}: $e');
+        return MapEntry(doc.id, <String, Voto>{});
+      }
+    });
+
+    final votosResults = await Future.wait(votosFutures);
+    votosPorElemento = Map.fromEntries(votosResults);
 
     return (
       votosPorElemento,
