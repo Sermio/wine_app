@@ -83,16 +83,16 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Resultados', style: TextStyle(color: textColor)),
+        title: const Text('Resultados', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
-        foregroundColor: textColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: shadowColor,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: Icon(
-              ordenarPorMedia ? Icons.sort_by_alpha : Icons.sort,
-              color: textColor,
-            ),
+            icon: Icon(ordenarPorMedia ? Icons.sort_by_alpha : Icons.sort),
             tooltip: 'Ordenar por media',
             onPressed: () {
               setState(() => ordenarPorMedia = !ordenarPorMedia);

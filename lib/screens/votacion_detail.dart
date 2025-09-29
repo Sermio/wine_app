@@ -21,13 +21,16 @@ class VotacionDetailScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Votaciones', style: TextStyle(color: textColor)),
+        title: const Text('Votaciones', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
-        foregroundColor: textColor,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        shadowColor: shadowColor,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           IconButton(
-            icon: const Icon(Icons.bar_chart, color: textColor),
+            icon: const Icon(Icons.bar_chart),
             tooltip: 'Ver resultados',
             onPressed: () {
               Navigator.of(context).push(
