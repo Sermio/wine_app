@@ -177,13 +177,13 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
               ),
               icon: Icon(
                 mostrarNombres ? Icons.visibility_off : Icons.visibility,
-                color: textColor,
+                color: Colors.white,
               ),
               label: Text(
                 mostrarNombres
                     ? 'Ocultar nombres reales'
                     : 'Mostrar nombres reales',
-                style: const TextStyle(color: textColor),
+                style: const TextStyle(color: Colors.white),
               ),
               onPressed: () {
                 setState(() {
