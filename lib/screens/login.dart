@@ -111,7 +111,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: Text(
                         isLogin ? 'Entrar' : 'Crear cuenta',
-                        style: const TextStyle(fontSize: 16, color: textColor),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
