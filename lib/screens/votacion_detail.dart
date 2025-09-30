@@ -56,7 +56,12 @@ class VotacionDetailScreen extends StatelessWidget {
           final userId = auth.currentUser!.uid;
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              100,
+            ), // Padding inferior para evitar solapamiento
             itemCount: elementos.length,
             itemBuilder: (context, index) {
               final elemento = elementos[index];
