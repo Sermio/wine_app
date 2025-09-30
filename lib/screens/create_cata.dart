@@ -43,7 +43,12 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(spacingM),
+        padding: const EdgeInsets.fromLTRB(
+          16,
+          16,
+          16,
+          100,
+        ), // Padding inferior para evitar solapamiento
         child: Form(
           key: _formKey,
           child: Column(
