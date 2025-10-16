@@ -15,7 +15,7 @@ class ResultadosScreen extends StatefulWidget {
 
 class _ResultadosScreenState extends State<ResultadosScreen> {
   bool mostrarNombres = false;
-  bool ordenarPorMedia = false;
+  bool ordenarPorMedia = true;
   bool _isLoading = true;
   Map<String, Map<String, Voto>>? _votosPorElemento;
   Map<String, String>? _nombres;
@@ -93,7 +93,9 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
         actions: [
           IconButton(
             icon: Icon(ordenarPorMedia ? Icons.sort_by_alpha : Icons.sort),
-            tooltip: 'Ordenar por media',
+            tooltip: ordenarPorMedia
+                ? 'Ordenar por ranking'
+                : 'Ordenar por posición original',
             onPressed: () {
               setState(() => ordenarPorMedia = !ordenarPorMedia);
             },
@@ -144,19 +146,43 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
 
     final usuarioList = usuarios.toList();
 
-    final medias = <String, double>{};
+    final sumas = <String, double>{};
+    final esSistemaAntiguo = <String, bool>{};
+
     for (var elementoId in elementoIds) {
-      final puntuaciones = _votosPorElemento![elementoId]!.values
-          .map((v) => v.puntuacion)
-          .toList();
-      medias[elementoId] = puntuaciones.isNotEmpty
-          ? puntuaciones.reduce((a, b) => a + b) / puntuaciones.length
-          : 0;
+      final votos = _votosPorElemento![elementoId]!.values.toList();
+
+      if (votos.isNotEmpty && votos.first.esSistemaAntiguo) {
+        // Sistema antiguo: sumar puntuaciones (mayor suma = mejor)
+        final puntuaciones = votos.map((v) => v.puntuacion!).toList();
+        sumas[elementoId] = puntuaciones.reduce((a, b) => a + b);
+        esSistemaAntiguo[elementoId] = true;
+      } else {
+        // Sistema nuevo: sumar posiciones (menor suma = mejor)
+        final posiciones = votos.map((v) => v.posicion!).toList();
+        sumas[elementoId] = posiciones.isNotEmpty
+            ? posiciones.reduce((a, b) => a + b).toDouble()
+            : 0.0;
+        esSistemaAntiguo[elementoId] = false;
+      }
     }
 
     final sortedElementoIds = [...elementoIds];
     if (ordenarPorMedia) {
-      sortedElementoIds.sort((a, b) => medias[b]!.compareTo(medias[a]!));
+      // Verificar si todos los elementos usan el mismo sistema
+      final todosAntiguos = esSistemaAntiguo.values.every((es) => es);
+      final todosNuevos = esSistemaAntiguo.values.every((es) => !es);
+
+      if (todosAntiguos) {
+        // Sistema antiguo: ordenar por suma descendente (mayor suma = mejor)
+        sortedElementoIds.sort((a, b) => sumas[b]!.compareTo(sumas[a]!));
+      } else if (todosNuevos) {
+        // Sistema nuevo: ordenar por suma ascendente (menor suma = mejor)
+        sortedElementoIds.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
+      } else {
+        // Sistema mixto: usar sistema nuevo por defecto
+        sortedElementoIds.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
+      }
     }
 
     return ListView.builder(
@@ -197,7 +223,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
         final realIndex = index - 1;
         final elementoId = sortedElementoIds[realIndex];
         final votos = _votosPorElemento![elementoId]!;
-        final media = medias[elementoId]!;
+        final suma = sumas[elementoId]!;
 
         final nombreReal = _nombres![elementoId] ?? 'Elemento';
         final descripcion = _descripciones![elementoId] ?? '';
@@ -248,10 +274,10 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Icon(Icons.star, color: Colors.amber),
+                      const Icon(Icons.trending_up, color: Colors.amber),
                       const SizedBox(width: 4),
                       Text(
-                        'Media: ${media.toStringAsFixed(1)} / 10',
+                        '${realIndex + 1}º puesto ($suma)',
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
@@ -294,7 +320,9 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                                 ),
                                 Text(
                                   voto != null
-                                      ? voto.puntuacion.toStringAsFixed(1)
+                                      ? (voto.esSistemaAntiguo
+                                            ? '${voto.puntuacion!.toStringAsFixed(1)}'
+                                            : '${voto.posicion}º')
                                       : '-',
                                   style: const TextStyle(
                                     fontSize: 14,

@@ -3,7 +3,7 @@ class ElementoCata {
   final String nombre;
   final String nombreAuxiliar;
   final String descripcion;
-  final double precio;
+  final double? precio;
   final String imagenUrl;
 
   ElementoCata({
@@ -11,7 +11,7 @@ class ElementoCata {
     required this.nombre,
     required this.nombreAuxiliar,
     required this.descripcion,
-    required this.precio,
+    this.precio,
     required this.imagenUrl,
   });
 
@@ -20,7 +20,7 @@ class ElementoCata {
     'nombre': nombre,
     'nombreAuxiliar': nombreAuxiliar,
     'descripcion': descripcion,
-    'precio': precio,
+    if (precio != null) 'precio': precio,
     'imagenUrl': imagenUrl,
   };
 
@@ -30,7 +30,9 @@ class ElementoCata {
       nombre: json['nombre'],
       nombreAuxiliar: json['nombreAuxiliar'] ?? '',
       descripcion: json['descripcion'],
-      precio: (json['precio'] as num).toDouble(),
+      precio: json['precio'] != null
+          ? (json['precio'] as num).toDouble()
+          : null,
       imagenUrl: json['imagenUrl'],
     );
   }
