@@ -87,6 +87,14 @@ class FirestoreService extends ChangeNotifier {
       throw ArgumentError('cataId, elementoId y userId no pueden estar vacíos');
     }
 
+    // Obtener el total de elementos de la cata para la conversión precisa
+    final elementosSnap = await _db
+        .collection('catas')
+        .doc(cataId)
+        .collection('elementos')
+        .get();
+    final totalElementos = elementosSnap.docs.length;
+
     final doc = await _db
         .collection('catas')
         .doc(cataId)
@@ -97,7 +105,7 @@ class FirestoreService extends ChangeNotifier {
         .get();
 
     if (doc.exists && doc.data() != null) {
-      return Voto.fromJson(userId, doc.data()!);
+      return Voto.fromJson(userId, doc.data()!, totalElementos: totalElementos);
     }
     return null;
   }
@@ -191,6 +199,7 @@ class FirestoreService extends ChangeNotifier {
 
     Map<String, Map<String, Voto>> votosPorElemento = {};
     Map<String, String> nombresDeElemento = {};
+    final totalElementos = elementosSnap.docs.length;
 
     for (var elementoDoc in elementosSnap.docs) {
       final elementoId = elementoDoc.id;
@@ -200,7 +209,11 @@ class FirestoreService extends ChangeNotifier {
       final votosSnap = await elementoDoc.reference.collection('votos').get();
       votosPorElemento[elementoId] = {
         for (var votoDoc in votosSnap.docs)
-          votoDoc.id: Voto.fromJson(votoDoc.id, votoDoc.data()),
+          votoDoc.id: Voto.fromJson(
+            votoDoc.id,
+            votoDoc.data(),
+            totalElementos: totalElementos,
+          ),
       };
     }
 
@@ -256,12 +269,17 @@ class FirestoreService extends ChangeNotifier {
     }
 
     // Obtener votos en paralelo para todos los elementos
+    final totalElementos = elementosSnap.docs.length;
     final votosFutures = elementosSnap.docs.map((doc) async {
       try {
         final votosSnap = await doc.reference.collection('votos').get();
         return MapEntry(doc.id, {
           for (var voto in votosSnap.docs)
-            voto.id: Voto.fromJson(voto.id, voto.data()),
+            voto.id: Voto.fromJson(
+              voto.id,
+              voto.data(),
+              totalElementos: totalElementos,
+            ),
         });
       } catch (e) {
         print('Error al obtener votos para elemento ${doc.id}: $e');
@@ -298,6 +316,14 @@ class FirestoreService extends ChangeNotifier {
     String votacionId,
     String elementoId,
   ) async {
+    // Obtener el total de elementos de la cata para la conversión precisa
+    final elementosSnap = await FirebaseFirestore.instance
+        .collection('catas')
+        .doc(votacionId)
+        .collection('elementos')
+        .get();
+    final totalElementos = elementosSnap.docs.length;
+
     final snapshot = await FirebaseFirestore.instance
         .collection('catas')
         .doc(votacionId)
@@ -307,7 +333,12 @@ class FirestoreService extends ChangeNotifier {
         .get();
 
     return {
-      for (var doc in snapshot.docs) doc.id: Voto.fromJson(doc.id, doc.data()),
+      for (var doc in snapshot.docs)
+        doc.id: Voto.fromJson(
+          doc.id,
+          doc.data(),
+          totalElementos: totalElementos,
+        ),
     };
   }
 }

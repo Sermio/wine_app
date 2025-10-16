@@ -195,7 +195,9 @@ class ElementoDetalleScreen extends StatelessWidget {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  'Nota: ${voto.puntuacion.toStringAsFixed(1)}',
+                                  voto.esSistemaAntiguo
+                                      ? 'Nota: ${voto.puntuacion!.toStringAsFixed(1)}'
+                                      : 'Posición: ${voto.posicion}º',
                                 ),
                                 if (voto.comentario.trim().isNotEmpty)
                                   Text('Comentario: ${voto.comentario}'),

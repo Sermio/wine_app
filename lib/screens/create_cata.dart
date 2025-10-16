@@ -207,7 +207,9 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                             nombreAuxiliar: 'Cata ${index + 1}',
                             nombre: v.nombre.text,
                             descripcion: v.descripcion.text,
-                            precio: double.tryParse(v.precio.text) ?? 0,
+                            precio: v.precio.text.isNotEmpty
+                                ? double.tryParse(v.precio.text)
+                                : null,
                             imagenUrl: v.imagenUrl ?? '',
                           ),
                         );
@@ -309,7 +311,8 @@ class _ElementoCataInput {
   void validate() {
     showNombreError = nombre.text.trim().isEmpty;
     showDescripcionError = false;
-    showPrecioError = double.tryParse(precio.text) == null;
+    showPrecioError =
+        precio.text.isNotEmpty && double.tryParse(precio.text) == null;
   }
 
   bool isValid() => !showNombreError && !showPrecioError;
@@ -496,7 +499,7 @@ class _ElementoCataInput {
             const SizedBox(height: spacingS),
             _styledField(
               controller: precio,
-              label: 'Precio (€)',
+              label: 'Precio (€) - Opcional',
               keyboardType: TextInputType.number,
               errorText: showPrecioError ? 'Introduce un número válido' : null,
             ),
