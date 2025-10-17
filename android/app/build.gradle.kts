@@ -33,8 +33,8 @@ android {
         applicationId = "com.smt.wine_app"
         minSdk = 23
         targetSdk = flutter.targetSdkVersion
-        versionCode = 4
-        versionName = "1.0.3"
+        versionCode = 5
+        versionName = "1.0.4"
     }
 
     signingConfigs {
