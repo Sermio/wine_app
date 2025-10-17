@@ -106,6 +106,50 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
     );
   }
 
+  IconData _getPositionIcon(int position) {
+    switch (position) {
+      case 1:
+        return Icons.emoji_events; // Trofeo para 1º puesto
+      case 2:
+        return Icons.workspace_premium; // Medalla para 2º puesto
+      case 3:
+        return Icons.military_tech; // Medalla para 3º puesto
+      default:
+        return Icons.trending_up; // Flecha para otros puestos
+    }
+  }
+
+  Color _getPositionIconColor(int position) {
+    switch (position) {
+      case 1:
+        return Colors.amber; // Dorado para 1º puesto
+      case 2:
+        return Colors.grey[400]!; // Plateado para 2º puesto
+      case 3:
+        return Colors.orange[700]!; // Bronce para 3º puesto
+      default:
+        return Colors.amber; // Amarillo para otros puestos
+    }
+  }
+
+  String _getPositionText(
+    String elementoId,
+    double suma,
+    Map<String, bool> esSistemaAntiguo,
+    Map<String, int> posicionesFijas,
+  ) {
+    final esAntiguo = esSistemaAntiguo[elementoId] ?? false;
+    final posicion = posicionesFijas[elementoId] ?? 1;
+
+    if (esAntiguo) {
+      // Sistema antiguo: mostrar suma de puntuaciones
+      return '$posicionº puesto (${suma.toStringAsFixed(1)} pts)';
+    } else {
+      // Sistema nuevo: mostrar suma de posiciones
+      return '$posicionº puesto (${suma.toStringAsFixed(0)} pts)';
+    }
+  }
+
   Widget _buildBody() {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -167,22 +211,35 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
       }
     }
 
+    // Calcular ranking fijo basado en los valores reales
+    final rankingFijo = [...elementoIds];
+    final todosAntiguos = esSistemaAntiguo.values.every((es) => es);
+    final todosNuevos = esSistemaAntiguo.values.every((es) => !es);
+
+    if (todosAntiguos) {
+      // Sistema antiguo: ordenar por suma descendente (mayor suma = mejor)
+      rankingFijo.sort((a, b) => sumas[b]!.compareTo(sumas[a]!));
+    } else if (todosNuevos) {
+      // Sistema nuevo: ordenar por suma ascendente (menor suma = mejor)
+      rankingFijo.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
+    } else {
+      // Sistema mixto: usar sistema nuevo por defecto
+      rankingFijo.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
+    }
+
+    // Crear mapa de posiciones fijas en el ranking
+    final posicionesFijas = <String, int>{};
+    for (int i = 0; i < rankingFijo.length; i++) {
+      posicionesFijas[rankingFijo[i]] = i + 1;
+    }
+
+    // Ordenar elementos para visualización
     final sortedElementoIds = [...elementoIds];
     if (ordenarPorMedia) {
-      // Verificar si todos los elementos usan el mismo sistema
-      final todosAntiguos = esSistemaAntiguo.values.every((es) => es);
-      final todosNuevos = esSistemaAntiguo.values.every((es) => !es);
-
-      if (todosAntiguos) {
-        // Sistema antiguo: ordenar por suma descendente (mayor suma = mejor)
-        sortedElementoIds.sort((a, b) => sumas[b]!.compareTo(sumas[a]!));
-      } else if (todosNuevos) {
-        // Sistema nuevo: ordenar por suma ascendente (menor suma = mejor)
-        sortedElementoIds.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
-      } else {
-        // Sistema mixto: usar sistema nuevo por defecto
-        sortedElementoIds.sort((a, b) => sumas[a]!.compareTo(sumas[b]!));
-      }
+      // Usar el mismo ordenamiento que el ranking fijo
+      sortedElementoIds.sort(
+        (a, b) => posicionesFijas[a]!.compareTo(posicionesFijas[b]!),
+      );
     }
 
     return ListView.builder(
@@ -274,10 +331,20 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      const Icon(Icons.trending_up, color: Colors.amber),
+                      Icon(
+                        _getPositionIcon(posicionesFijas[elementoId] ?? 1),
+                        color: _getPositionIconColor(
+                          posicionesFijas[elementoId] ?? 1,
+                        ),
+                      ),
                       const SizedBox(width: 4),
                       Text(
-                        '${realIndex + 1}º puesto ($suma)',
+                        _getPositionText(
+                          elementoId,
+                          suma,
+                          esSistemaAntiguo,
+                          posicionesFijas,
+                        ),
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w500,
