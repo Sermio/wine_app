@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:wine_app/screens/home.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/utils/styles.dart';
 
@@ -15,6 +15,10 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  static const String _savedEmailKey = 'saved_email';
+  static const String _savedPasswordKey = 'saved_password';
+  static const String _rememberCredentialsKey = 'remember_credentials';
+
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   final nombreController = TextEditingController();
@@ -23,63 +27,85 @@ class _LoginScreenState extends State<LoginScreen> {
   bool showPassword = false;
   bool rememberCredentials = false;
   bool emailError = false;
+  bool _prefsNoDisponibles = false;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedCredentials();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _loadSavedCredentials();
+      }
+    });
   }
 
   Future<void> _loadSavedCredentials() async {
     try {
-      // Usar SharedPreferences básico de Flutter
-      const platform = MethodChannel('flutter_shared_preferences');
+      final prefs = await _getPrefsWithRetry();
+      if (prefs == null) return;
+      final recordar = prefs.getBool(_rememberCredentialsKey) ?? false;
+      final email = prefs.getString(_savedEmailKey);
+      final password = prefs.getString(_savedPasswordKey);
 
-      final email = await platform.invokeMethod('getString', {
-        'key': 'saved_email',
-      });
-      final password = await platform.invokeMethod('getString', {
-        'key': 'saved_password',
-      });
+      if (mounted) {
+        setState(() => rememberCredentials = recordar);
+      }
 
-      if (email != null && password != null) {
+      if (recordar && email != null && password != null) {
         emailController.text = email;
         passwordController.text = password;
-        if (mounted) {
-          setState(() => rememberCredentials = true);
-        }
-        print('DEBUG: Credenciales cargadas desde SharedPreferences');
+        await _autoSignInIfPossible(email, password);
       }
-    } catch (e) {
-      print('Error cargando credenciales guardadas: $e');
-      // Si falla, simplemente no cargamos nada
+    } catch (_) {}
+  }
+
+  Future<void> _autoSignInIfPossible(String email, String password) async {
+    if (!mounted || email.trim().isEmpty || password.trim().isEmpty) return;
+    if (FirebaseAuth.instance.currentUser != null) return;
+
+    final auth = Provider.of<AuthService>(context, listen: false);
+    try {
+      await auth.signIn(email.trim(), password.trim());
+    } catch (_) {
+      final prefs = await _getPrefsWithRetry();
+      if (prefs == null) return;
+      await prefs.remove(_savedPasswordKey);
     }
   }
 
   Future<void> _saveCredentials() async {
     try {
-      // Usar SharedPreferences básico de Flutter
-      const platform = MethodChannel('flutter_shared_preferences');
-
+      final prefs = await _getPrefsWithRetry();
+      if (prefs == null) return;
+      await prefs.setBool(_rememberCredentialsKey, rememberCredentials);
       if (rememberCredentials) {
-        await platform.invokeMethod('setString', {
-          'key': 'saved_email',
-          'value': emailController.text.trim(),
-        });
-        await platform.invokeMethod('setString', {
-          'key': 'saved_password',
-          'value': passwordController.text.trim(),
-        });
-        print('DEBUG: Credenciales guardadas en SharedPreferences');
+        await prefs.setString(_savedEmailKey, emailController.text.trim());
+        await prefs.setString(
+          _savedPasswordKey,
+          passwordController.text.trim(),
+        );
       } else {
-        await platform.invokeMethod('remove', {'key': 'saved_email'});
-        await platform.invokeMethod('remove', {'key': 'saved_password'});
-        print('DEBUG: Credenciales eliminadas de SharedPreferences');
+        await prefs.remove(_savedEmailKey);
+        await prefs.remove(_savedPasswordKey);
       }
-    } catch (e) {
-      print('Error guardando credenciales: $e');
-      // Si falla, simplemente no guardamos nada
+    } catch (_) {}
+  }
+
+  Future<SharedPreferences?> _getPrefsWithRetry() async {
+    if (_prefsNoDisponibles) return null;
+    for (var i = 0; i < 3; i++) {
+      try {
+        return await SharedPreferences.getInstance();
+      } on PlatformException catch (e) {
+        final channelNoDisponible =
+            e.code == 'channel-error' ||
+            (e.message?.contains('Unable to establish connection') ?? false);
+        if (!channelNoDisponible) break;
+        await Future.delayed(const Duration(milliseconds: 400));
+      }
     }
+    _prefsNoDisponibles = true;
+    return null;
   }
 
   Future<void> _resetPassword() async {
@@ -164,9 +190,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (auth.currentUser != null && mounted) {
         await _saveCredentials();
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const HomeScreen()),
-        );
       }
     } catch (e) {
       if (mounted) {
