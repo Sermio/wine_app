@@ -167,6 +167,53 @@ class FirestoreService extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> updateVotacion(
+    Cata cata, {
+    required List<String> elementosAEliminar,
+  }) async {
+    final cataRef = _db.collection('catas').doc(cata.id);
+
+    await cataRef.update({
+      'nombre': cata.nombre,
+      'fecha': cata.fecha.toIso8601String(),
+      'creadorId': cata.creadorId,
+    });
+
+    for (final elementoId in elementosAEliminar) {
+      final elementoRef = cataRef.collection('elementos').doc(elementoId);
+      final elementoSnap = await elementoRef.get();
+
+      if (elementoSnap.exists) {
+        final data = elementoSnap.data();
+        final imagenUrl = data?['imagenUrl'] as String?;
+        if (imagenUrl != null && imagenUrl.isNotEmpty) {
+          try {
+            final ref = FirebaseStorage.instance.refFromURL(imagenUrl);
+            await ref.delete();
+          } catch (e) {
+            print('Error al eliminar imagen: $e');
+          }
+        }
+
+        final votos = await elementoRef.collection('votos').get();
+        for (final voto in votos.docs) {
+          await voto.reference.delete();
+        }
+      }
+
+      await elementoRef.delete();
+    }
+
+    for (final elemento in cata.elementos) {
+      await cataRef
+          .collection('elementos')
+          .doc(elemento.id)
+          .set(elemento.toJson(), SetOptions(merge: true));
+    }
+
+    notifyListeners();
+  }
+
   Future<void> addOrUpdateVoto(
     String cataId,
     String elementoId,

@@ -202,11 +202,14 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
         sumas[elementoId] = puntuaciones.reduce((a, b) => a + b);
         esSistemaAntiguo[elementoId] = true;
       } else {
-        // Sistema nuevo: sumar posiciones (menor suma = mejor)
-        final posiciones = votos.map((v) => v.posicion!).toList();
+        // Sistema nuevo: sumar posiciones (menor suma = mejor); ignorar votos solo comentario
+        final posiciones = votos
+            .where((v) => v.posicion != null)
+            .map((v) => v.posicion!)
+            .toList();
         sumas[elementoId] = posiciones.isNotEmpty
             ? posiciones.reduce((a, b) => a + b).toDouble()
-            : 0.0;
+            : double.infinity;
         esSistemaAntiguo[elementoId] = false;
       }
     }
@@ -289,7 +292,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
         final imagenUrl = _imagenes![elementoId] ?? '';
 
         final nombreMostrar = mostrarNombres
-            ? '$nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
+            ? '$nombreAux - $nombreReal ${precio != null ? '(${precio.toStringAsFixed(2)}€)' : ''}'
             : nombreAux;
 
         return GestureDetector(
@@ -389,7 +392,9 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
                                   voto != null
                                       ? (voto.esSistemaAntiguo
                                             ? '${voto.puntuacion!.toStringAsFixed(1)}'
-                                            : '${voto.posicion}º')
+                                            : (voto.posicion != null
+                                                  ? '${voto.posicion}º'
+                                                  : '—'))
                                       : '-',
                                   style: const TextStyle(
                                     fontSize: 14,

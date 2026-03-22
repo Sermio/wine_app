@@ -25,10 +25,11 @@ class Voto {
     int? totalElementos,
   }) {
     if (json.containsKey('posicion')) {
-      // Votación nueva con sistema de ranking
+      // Votación nueva con sistema de ranking (posición opcional en Firestore)
+      final raw = json['posicion'];
       return Voto(
         usuarioId: uid,
-        posicion: json['posicion'] as int,
+        posicion: raw == null ? null : (raw as num).toInt(),
         comentario: json['comentario'] ?? '',
         esSistemaAntiguo: false,
       );
@@ -42,10 +43,10 @@ class Voto {
         esSistemaAntiguo: true,
       );
     } else {
-      // Fallback si no hay ningún campo
+      // Solo comentario u otros documentos sin posición ni puntuación
       return Voto(
         usuarioId: uid,
-        posicion: 1,
+        posicion: null,
         comentario: json['comentario'] ?? '',
         esSistemaAntiguo: false,
       );

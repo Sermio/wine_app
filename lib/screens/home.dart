@@ -11,6 +11,51 @@ import 'package:wine_app/utils/styles.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  Future<void> _mostrarOpcionesCata(
+    BuildContext context,
+    FirestoreService firestore,
+    Cata cata,
+  ) async {
+    final accion = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Editar cata'),
+              onTap: () => Navigator.of(ctx).pop('editar'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete, color: Colors.red),
+              title: const Text('Eliminar cata'),
+              onTap: () => Navigator.of(ctx).pop('eliminar'),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+
+    if (accion == 'editar') {
+      if (!context.mounted) return;
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute(builder: (_) => CreateCataScreen(cata: cata)));
+      return;
+    }
+
+    if (accion == 'eliminar') {
+      if (!context.mounted) return;
+      await confirmarYBorrarCata(context, firestore, cata);
+    }
+  }
+
   Future<void> confirmarYBorrarCata(
     BuildContext context,
     FirestoreService firestore,
@@ -103,9 +148,10 @@ class HomeScreen extends StatelessWidget {
           final catas = snapshot.data!;
           final ahora = DateTime.now();
           final hoy = DateTime(ahora.year, ahora.month, ahora.day);
+          final bottomInset = MediaQuery.of(context).padding.bottom;
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: EdgeInsets.fromLTRB(16, 16, 16, 104 + bottomInset),
             itemCount: catas.length,
             itemBuilder: (context, index) {
               final cata = catas[index];
@@ -170,7 +216,7 @@ class HomeScreen extends StatelessWidget {
                     );
                   },
                   onLongPress: () {
-                    confirmarYBorrarCata(context, firestore, cata);
+                    _mostrarOpcionesCata(context, firestore, cata);
                   },
                 ),
               );

@@ -12,7 +12,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class CreateCataScreen extends StatefulWidget {
-  const CreateCataScreen({super.key});
+  final Cata? cata;
+
+  const CreateCataScreen({super.key, this.cata});
 
   @override
   State<CreateCataScreen> createState() => _CreateCataScreenState();
@@ -25,6 +27,53 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
   DateTime? _fecha;
   bool fechaObligatoria = false;
   bool elementosValidos = true;
+  bool _cargandoDatosEdicion = false;
+  List<String> _elementosOriginalesIds = [];
+
+  bool get _esEdicion => widget.cata != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_esEdicion) {
+      nombreController.text = widget.cata!.nombre;
+      _fecha = widget.cata!.fecha;
+      _cargarDatosEdicion();
+    }
+  }
+
+  Future<void> _cargarDatosEdicion() async {
+    setState(() => _cargandoDatosEdicion = true);
+    try {
+      final firestore = Provider.of<FirestoreService>(context, listen: false);
+      final elementos = await firestore.fetchElementosDeCata(widget.cata!.id);
+      if (!mounted) return;
+
+      setState(() {
+        for (final elemento in _elementos) {
+          elemento.dispose();
+        }
+        _elementos.clear();
+        if (elementos.isEmpty) {
+          _elementos.add(_ElementoCataInput());
+        } else {
+          _elementos.addAll(
+            elementos.map((e) => _ElementoCataInput.fromElemento(e)),
+          );
+          _elementosOriginalesIds = elementos.map((e) => e.id).toList();
+        }
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error al cargar la cata: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _cargandoDatosEdicion = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +83,10 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Nueva cata', style: appBarTitleStyle),
+        title: Text(
+          _esEdicion ? 'Editar cata' : 'Nueva cata',
+          style: appBarTitleStyle,
+        ),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
@@ -42,215 +94,256 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
         shadowColor: shadowColor,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(
-          16,
-          16,
-          16,
-          100,
-        ), // Padding inferior para evitar solapamiento
-        child: Form(
-          key: _formKey,
-          child: Column(
-            children: [
-              GestureDetector(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                    initialDate: DateTime.now(),
-                  );
-                  if (date != null) {
-                    setState(() {
-                      _fecha = date;
-                      fechaObligatoria = false;
-                    });
-                  }
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: spacingM,
-                    vertical: spacingM,
-                  ),
-                  margin: const EdgeInsets.only(bottom: spacingS),
-                  decoration: BoxDecoration(
-                    color: surfaceColor,
-                    borderRadius: BorderRadius.circular(radiusM),
-                    border: Border.all(
-                      color: fechaObligatoria ? errorColor : dividerColor,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: shadowColor,
-                        blurRadius: elevationS,
-                        offset: const Offset(0, 1),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        color: fechaObligatoria ? errorColor : primaryColor,
-                      ),
-                      const SizedBox(width: spacingM),
-                      Text(
-                        _fecha == null
-                            ? 'Seleccionar fecha'
-                            : _fecha!.toLocal().toString().split(' ')[0],
-                        style: TextStyle(
-                          color: fechaObligatoria
-                              ? errorColor
-                              : textPrimaryColor,
-                          fontSize: 16,
-                          fontWeight: _fecha == null
-                              ? FontWeight.normal
-                              : FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              _styledTextField(
-                controller: nombreController,
-                label: 'Nombre de la cata',
-                validator: (value) => value == null || value.trim().isEmpty
-                    ? 'Este campo es obligatorio'
-                    : null,
-              ),
-              if (fechaObligatoria)
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'La fecha es obligatoria',
-                    style: TextStyle(color: errorColor, fontSize: 12),
-                  ),
-                ),
-              const SizedBox(height: spacingM),
-              ..._elementos.asMap().entries.map((entry) {
-                final index = entry.key;
-                final elemento = entry.value;
-                return elemento.build(
-                  context,
-                  index,
-                  onRemove: () => setState(() => _elementos.removeAt(index)),
-                  onUpdate: () =>
-                      setState(() {}), // <- Esto hace que se redibuje
-                );
-              }),
-              const SizedBox(height: spacingL),
-              FloatingActionButton(
-                backgroundColor: primaryColor,
-                foregroundColor: Colors.white,
-                elevation: elevationM,
-                onPressed: () =>
-                    setState(() => _elementos.add(_ElementoCataInput())),
-                child: const Icon(Icons.add),
-              ),
-              if (!elementosValidos)
-                const Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    'Debe haber al menos un elemento válido',
-                    style: TextStyle(color: errorColor),
-                  ),
-                ),
-              const SizedBox(height: spacingL),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    bool hasError = false;
-
-                    if (!_formKey.currentState!.validate()) return;
-
-                    if (_fecha == null) {
-                      setState(() => fechaObligatoria = true);
-                      hasError = true;
-                    }
-
-                    final creador = auth.currentUser!.uid;
-                    final elementos = <ElementoCata>[];
-
-                    elementosValidos = false;
-
-                    for (var v in _elementos) {
-                      v.validate();
-                      if (v.isValid()) elementosValidos = true;
-                    }
-
-                    if (!elementosValidos) hasError = true;
-
-                    setState(() {});
-
-                    if (hasError) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Revisa los campos obligatorios'),
-                        ),
-                      );
-                      return;
-                    }
-
-                    for (var entry in _elementos.asMap().entries) {
-                      final index = entry.key;
-                      final v = entry.value;
-
-                      if (v.isValid()) {
-                        elementos.add(
-                          ElementoCata(
-                            id: const Uuid().v4(),
-                            nombreAuxiliar: 'Cata ${index + 1}',
-                            nombre: v.nombre.text,
-                            descripcion: v.descripcion.text,
-                            precio: v.precio.text.isNotEmpty
-                                ? double.tryParse(v.precio.text)
-                                : null,
-                            imagenUrl: v.imagenUrl ?? '',
-                          ),
+      body: _cargandoDatosEdicion
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(
+                16,
+                16,
+                16,
+                100,
+              ), // Padding inferior para evitar solapamiento
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          firstDate: _esEdicion
+                              ? DateTime(2000)
+                              : DateTime.now(),
+                          lastDate: DateTime(2100),
+                          initialDate: _fecha ?? DateTime.now(),
                         );
-                      }
-                    }
-
-                    final nuevaCata = Cata(
-                      id: const Uuid().v4(),
-                      nombre: nombreController.text.trim(),
-                      fecha: _fecha!,
-                      creadorId: creador,
-                      elementos: elementos,
-                    );
-
-                    await firestore.addVotacion(nuevaCata);
-
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Cata creada correctamente'),
+                        if (date != null) {
+                          setState(() {
+                            _fecha = date;
+                            fechaObligatoria = false;
+                          });
+                        }
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: spacingM,
+                          vertical: spacingM,
+                        ),
+                        margin: const EdgeInsets.only(bottom: spacingS),
+                        decoration: BoxDecoration(
+                          color: surfaceColor,
+                          borderRadius: BorderRadius.circular(radiusM),
+                          border: Border.all(
+                            color: fechaObligatoria ? errorColor : dividerColor,
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: shadowColor,
+                              blurRadius: elevationS,
+                              offset: const Offset(0, 1),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today,
+                              color: fechaObligatoria
+                                  ? errorColor
+                                  : primaryColor,
+                            ),
+                            const SizedBox(width: spacingM),
+                            Text(
+                              _fecha == null
+                                  ? 'Seleccionar fecha'
+                                  : _fecha!.toLocal().toString().split(' ')[0],
+                              style: TextStyle(
+                                color: fechaObligatoria
+                                    ? errorColor
+                                    : textPrimaryColor,
+                                fontSize: 16,
+                                fontWeight: _fecha == null
+                                    ? FontWeight.normal
+                                    : FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    );
-
-                    Navigator.pop(context);
-                  },
-
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: spacingM),
-                    elevation: elevationM,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(radiusM),
                     ),
-                  ),
-                  child: const Text('Crear cata', style: buttonTextStyle),
+                    _styledTextField(
+                      controller: nombreController,
+                      label: 'Nombre de la cata',
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Este campo es obligatorio'
+                          : null,
+                    ),
+                    if (fechaObligatoria)
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'La fecha es obligatoria',
+                          style: TextStyle(color: errorColor, fontSize: 12),
+                        ),
+                      ),
+                    const SizedBox(height: spacingM),
+                    ..._elementos.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final elemento = entry.value;
+                      return elemento.build(
+                        context,
+                        index,
+                        onRemove: () => setState(() {
+                          final eliminado = _elementos.removeAt(index);
+                          eliminado.dispose();
+                        }),
+                        onUpdate: () =>
+                            setState(() {}), // <- Esto hace que se redibuje
+                      );
+                    }),
+                    const SizedBox(height: spacingL),
+                    FloatingActionButton(
+                      backgroundColor: primaryColor,
+                      foregroundColor: Colors.white,
+                      elevation: elevationM,
+                      onPressed: () =>
+                          setState(() => _elementos.add(_ElementoCataInput())),
+                      child: const Icon(Icons.add),
+                    ),
+                    if (!elementosValidos)
+                      const Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Debe haber al menos un elemento válido',
+                          style: TextStyle(color: errorColor),
+                        ),
+                      ),
+                    const SizedBox(height: spacingL),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          bool hasError = false;
+
+                          if (!_formKey.currentState!.validate()) return;
+
+                          if (_fecha == null) {
+                            setState(() => fechaObligatoria = true);
+                            hasError = true;
+                          }
+
+                          final elementos = <ElementoCata>[];
+
+                          elementosValidos = false;
+
+                          for (var v in _elementos) {
+                            v.validate();
+                            if (v.isValid()) elementosValidos = true;
+                          }
+
+                          if (!elementosValidos) hasError = true;
+
+                          setState(() {});
+
+                          if (hasError) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Revisa los campos obligatorios'),
+                              ),
+                            );
+                            return;
+                          }
+
+                          for (var entry in _elementos.asMap().entries) {
+                            final index = entry.key;
+                            final v = entry.value;
+
+                            if (v.isValid()) {
+                              elementos.add(
+                                ElementoCata(
+                                  id: v.id,
+                                  nombreAuxiliar: 'Cata ${index + 1}',
+                                  nombre: v.nombre.text,
+                                  descripcion: v.descripcion.text,
+                                  precio: v.precio.text.isNotEmpty
+                                      ? double.tryParse(v.precio.text)
+                                      : null,
+                                  imagenUrl: v.imagenUrl ?? '',
+                                ),
+                              );
+                            }
+                          }
+
+                          if (_esEdicion) {
+                            final idsActuales = elementos
+                                .map((e) => e.id)
+                                .toSet();
+                            final elementosAEliminar = _elementosOriginalesIds
+                                .where((id) => !idsActuales.contains(id))
+                                .toList();
+
+                            final cataActualizada = Cata(
+                              id: widget.cata!.id,
+                              nombre: nombreController.text.trim(),
+                              fecha: _fecha!,
+                              creadorId: widget.cata!.creadorId,
+                              elementos: elementos,
+                            );
+
+                            await firestore.updateVotacion(
+                              cataActualizada,
+                              elementosAEliminar: elementosAEliminar,
+                            );
+                          } else {
+                            final creador = auth.currentUser!.uid;
+                            final nuevaCata = Cata(
+                              id: const Uuid().v4(),
+                              nombre: nombreController.text.trim(),
+                              fecha: _fecha!,
+                              creadorId: creador,
+                              elementos: elementos,
+                            );
+
+                            await firestore.addVotacion(nuevaCata);
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                _esEdicion
+                                    ? 'Cata actualizada correctamente'
+                                    : 'Cata creada correctamente',
+                              ),
+                            ),
+                          );
+
+                          Navigator.pop(context);
+                        },
+
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                            vertical: spacingM,
+                          ),
+                          elevation: elevationM,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(radiusM),
+                          ),
+                        ),
+                        child: Text(
+                          _esEdicion ? 'Guardar cambios' : 'Crear cata',
+                          style: buttonTextStyle,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 
@@ -292,9 +385,19 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
       validator: validator,
     );
   }
+
+  @override
+  void dispose() {
+    nombreController.dispose();
+    for (final elemento in _elementos) {
+      elemento.dispose();
+    }
+    super.dispose();
+  }
 }
 
 class _ElementoCataInput {
+  final String id;
   final nombre = TextEditingController();
   final descripcion = TextEditingController();
   final precio = TextEditingController();
@@ -307,6 +410,17 @@ class _ElementoCataInput {
   bool showPrecioError = false;
 
   final ImagePicker _picker = ImagePicker();
+
+  _ElementoCataInput({String? id}) : id = id ?? const Uuid().v4();
+
+  factory _ElementoCataInput.fromElemento(ElementoCata elemento) {
+    final input = _ElementoCataInput(id: elemento.id);
+    input.nombre.text = elemento.nombre;
+    input.descripcion.text = elemento.descripcion;
+    input.precio.text = elemento.precio?.toString() ?? '';
+    input.imagenUrl = elemento.imagenUrl.isEmpty ? null : elemento.imagenUrl;
+    return input;
+  }
 
   void validate() {
     showNombreError = nombre.text.trim().isEmpty;
@@ -467,8 +581,6 @@ class _ElementoCataInput {
     VoidCallback? onRemove,
     VoidCallback? onUpdate,
   }) {
-    final elementoId = const Uuid().v4();
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: spacingS),
       decoration: cardDecoration,
@@ -514,11 +626,7 @@ class _ElementoCataInput {
                   onUpdate?.call();
                 } else {
                   // Si no hay imagen, subir
-                  await _selectAndUploadImage(
-                    context,
-                    elementoId,
-                    onUpdate ?? () {},
-                  );
+                  await _selectAndUploadImage(context, id, onUpdate ?? () {});
                   if (onUpdate != null) onUpdate();
                 }
               },
@@ -692,6 +800,12 @@ class _ElementoCataInput {
         ),
       ),
     );
+  }
+
+  void dispose() {
+    nombre.dispose();
+    descripcion.dispose();
+    precio.dispose();
   }
 
   void _showImageModal(BuildContext context, String imageUrl) {
