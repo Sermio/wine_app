@@ -194,11 +194,19 @@ class ElementoDetalleScreen extends StatelessWidget {
                                   ),
                                 ),
                                 const SizedBox(height: 4),
-                                Text(
-                                  voto.esSistemaAntiguo
-                                      ? 'Nota: ${voto.puntuacion!.toStringAsFixed(1)}'
-                                      : 'Posición: ${voto.posicion}º',
-                                ),
+                                if (voto.esSistemaAntiguo)
+                                  Text(
+                                    'Nota: ${voto.puntuacion!.toStringAsFixed(1)}',
+                                  )
+                                else if (voto.posicion != null)
+                                  Text('Posición: ${voto.posicion}º')
+                                else
+                                  const Text(
+                                    'Solo comentario',
+                                    style: TextStyle(
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
                                 if (voto.comentario.trim().isNotEmpty)
                                   Text('Comentario: ${voto.comentario}'),
                               ],

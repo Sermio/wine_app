@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wine_app/models/cata.dart';
 import 'package:wine_app/models/elemento_cata.dart';
 import 'package:wine_app/models/voto.dart';
@@ -18,11 +21,72 @@ class VotacionDetailScreen extends StatefulWidget {
   State<VotacionDetailScreen> createState() => _VotacionDetailScreenState();
 }
 
-class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
+class _VotacionDetailScreenState extends State<VotacionDetailScreen>
+    with WidgetsBindingObserver {
   final Map<String, Voto> _votosPendientes = {};
   bool _isEnviando = false;
   bool _hayVotosEnviados = false;
   Set<String> _elementosConPosicionesRepetidas = {};
+
+  /// Mismo Future en cada rebuild para que el FutureBuilder no reinicie la lista al hacer setState.
+  Future<List<ElementoCata>>? _elementosFuture;
+  bool _draftInicializado = false;
+  String? _draftKey;
+
+  String _buildDraftKey(String userId) {
+    return 'votacion_draft_${widget.cata.id}_$userId';
+  }
+
+  Future<void> _guardarBorradorLocal() async {
+    if (_draftKey == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final payload = {
+      for (final entry in _votosPendientes.entries)
+        entry.key: entry.value.toJson(),
+    };
+    await prefs.setString(_draftKey!, jsonEncode(payload));
+  }
+
+  Future<void> _limpiarBorradorLocal() async {
+    if (_draftKey == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_draftKey!);
+  }
+
+  Future<void> _cargarBorradorLocal(String userId) async {
+    final key = _buildDraftKey(userId);
+    _draftKey = key;
+
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(key);
+    if (raw == null || raw.isEmpty) return;
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return;
+
+      final restaurados = <String, Voto>{};
+      for (final entry in decoded.entries) {
+        final value = entry.value;
+        if (value is Map) {
+          restaurados[entry.key] = Voto.fromJson(
+            userId,
+            Map<String, dynamic>.from(value),
+          );
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _votosPendientes
+          ..clear()
+          ..addAll(restaurados);
+        _detectarPosicionesRepetidas();
+      });
+    } catch (_) {
+      // Si el borrador está corrupto, lo ignoramos sin bloquear la pantalla.
+    }
+  }
 
   void _enviarTodasLasVotaciones(BuildContext context) async {
     if (_votosPendientes.isEmpty) {
@@ -35,7 +99,7 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
       return;
     }
 
-    // Validar que no haya puestos repetidos SOLO en los votos pendientes
+    // Validar que no haya puestos repetidos entre los votos que sí tienen posición
     final posiciones = _votosPendientes.values
         .map((v) => v.posicion)
         .where((pos) => pos != null)
@@ -44,49 +108,9 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
     final posicionesUnicas = posiciones.toSet();
 
     if (posiciones.length != posicionesUnicas.length) {
-      // Encontrar posiciones repetidas
-      final posicionesRepetidas = <int>[];
-      final posicionesContadas = <int, int>{};
-
-      for (final posicion in posiciones) {
-        posicionesContadas[posicion] = (posicionesContadas[posicion] ?? 0) + 1;
-      }
-
-      for (final entry in posicionesContadas.entries) {
-        if (entry.value > 1) {
-          posicionesRepetidas.add(entry.key);
-        }
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Hay posiciones repetidas'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
-        ),
-      );
-      return;
-    }
-
-    // Validar que todas las posiciones estén asignadas (1 a N)
-    final totalElementos = _votosPendientes.length;
-    final posicionesEsperadas = List.generate(
-      totalElementos,
-      (index) => index + 1,
-    );
-    final posicionesAsignadas = posiciones.toSet();
-
-    if (!posicionesEsperadas.every(
-      (pos) => posicionesAsignadas.contains(pos),
-    )) {
-      // Encontrar posiciones faltantes
-      final posicionesFaltantes = posicionesEsperadas
-          .where((pos) => !posicionesAsignadas.contains(pos))
-          .toList();
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Faltan posiciones por asignar'),
           backgroundColor: Colors.red,
           duration: Duration(seconds: 5),
         ),
@@ -131,6 +155,7 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
           _votosPendientes.clear();
           _hayVotosEnviados = true;
         });
+        await _limpiarBorradorLocal();
       }
     } catch (e) {
       if (mounted) {
@@ -155,6 +180,7 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
       }
       _detectarPosicionesRepetidas();
     });
+    _guardarBorradorLocal();
   }
 
   void _detectarPosicionesRepetidas() {
@@ -220,13 +246,52 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _verificarVotosExistentes();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _elementosFuture ??= Provider.of<FirestoreService>(
+      context,
+      listen: false,
+    ).fetchElementosDeCata(widget.cata.id);
+
+    if (!_draftInicializado) {
+      _draftInicializado = true;
+      final userId = Provider.of<AuthService>(
+        context,
+        listen: false,
+      ).currentUser?.uid;
+      if (userId != null) {
+        _cargarBorradorLocal(userId);
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _guardarBorradorLocal();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthService>(context, listen: false);
-    final firestore = Provider.of<FirestoreService>(context, listen: false);
+    final mediaQuery = MediaQuery.of(context);
+    final bottomInset = mediaQuery.padding.bottom;
+    final keyboardInset = mediaQuery.viewInsets.bottom;
+    final tecladoAbierto = keyboardInset > 0;
 
     // Verificar si la cata está cerrada
     final ahora = DateTime.now();
@@ -252,24 +317,11 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
         elevation: 0,
         shadowColor: shadowColor,
         iconTheme: const IconThemeData(color: Colors.white),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            tooltip: 'Ver resultados',
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ResultadosScreen(votacionId: widget.cata.id),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: Stack(
         children: [
           FutureBuilder<List<ElementoCata>>(
-            future: firestore.fetchElementosDeCata(widget.cata.id),
+            future: _elementosFuture,
             builder: (context, snapshot) {
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
@@ -284,11 +336,9 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
               return ListView.builder(
                 padding: EdgeInsets.fromLTRB(
                   16,
-                  cataCerrada ? 16 : 80, // Menos margen si la cata está cerrada
                   16,
-                  cataCerrada
-                      ? 16
-                      : 100, // Menos padding si la cata está cerrada
+                  16,
+                  cataCerrada ? 16 : (tecladoAbierto ? 24 : 148 + bottomInset),
                 ),
                 itemCount:
                     elementos.length +
@@ -339,11 +389,13 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
                   final elemento = elementos[elementoIndex];
 
                   return VoteForm(
+                    key: ValueKey(elemento.id),
                     votacionId: widget.cata.id,
                     elemento: elemento,
                     fechaCata: widget.cata.fecha,
                     userId: userId,
                     totalElementos: elementos.length,
+                    votoInicial: _votosPendientes[elemento.id],
                     cataCerrada: cataCerrada,
                     tienePosicionRepetida: _elementosConPosicionesRepetidas
                         .contains(elemento.id),
@@ -359,10 +411,10 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
             },
           ),
 
-          // Botón flotante fijo para enviar todas las votaciones (solo si la cata no está cerrada)
-          if (!cataCerrada)
+          // Barra inferior de acciones fija (solo si la cata no está cerrada)
+          if (!cataCerrada && !tecladoAbierto)
             Positioned(
-              top: 16,
+              bottom: 16 + bottomInset,
               left: 16,
               right: 16,
               child: Container(
@@ -371,48 +423,76 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen> {
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: ElevatedButton.icon(
-                  onPressed: _isEnviando
-                      ? null
-                      : () {
-                          _enviarTodasLasVotaciones(context);
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ResultadosScreen(votacionId: widget.cata.id),
+                            ),
+                          );
                         },
-                  icon: _isEnviando
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
+                        icon: const Icon(Icons.bar_chart),
+                        label: const Text('Resultados'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: primaryColor,
+                          side: const BorderSide(color: primaryColor),
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                        )
-                      : const Icon(Icons.send, color: Colors.white),
-                  label: Text(
-                    _isEnviando
-                        ? 'Enviando...'
-                        : _hayVotosEnviados
-                        ? 'Actualizar votaciones (${_votosPendientes.length})'
-                        : 'Enviar todas las votaciones (${_votosPendientes.length})',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
+                        ),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton.icon(
+                        onPressed: _isEnviando
+                            ? null
+                            : () {
+                                _enviarTodasLasVotaciones(context);
+                              },
+                        icon: _isEnviando
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.save, color: Colors.white),
+                        label: Text(
+                          _isEnviando
+                              ? 'Guardando...'
+                              : 'Guardar (${_votosPendientes.length})',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: primaryColor,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ),
             ),

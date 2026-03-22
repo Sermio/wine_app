@@ -9,6 +9,7 @@ class VoteForm extends StatefulWidget {
   final DateTime fechaCata;
   final String userId;
   final int totalElementos;
+  final Voto? votoInicial;
   final Function(Voto?)? onVoteChanged;
   final bool cataCerrada;
   final bool tienePosicionRepetida;
@@ -20,6 +21,7 @@ class VoteForm extends StatefulWidget {
     required this.fechaCata,
     required this.userId,
     required this.totalElementos,
+    this.votoInicial,
     this.onVoteChanged,
     this.cataCerrada = false,
     this.tienePosicionRepetida = false,
@@ -29,7 +31,8 @@ class VoteForm extends StatefulWidget {
   State<VoteForm> createState() => _VoteFormState();
 }
 
-class _VoteFormState extends State<VoteForm> {
+class _VoteFormState extends State<VoteForm>
+    with AutomaticKeepAliveClientMixin {
   final FirestoreService firestore = FirestoreService();
   final TextEditingController comentarioController = TextEditingController();
 
@@ -38,9 +41,57 @@ class _VoteFormState extends State<VoteForm> {
   Voto? votoExistente;
 
   @override
+  bool get wantKeepAlive => true;
+
+  @override
   void initState() {
     super.initState();
-    _cargarVotoExistente();
+    if (widget.votoInicial != null) {
+      _aplicarVoto(widget.votoInicial!);
+    } else {
+      _cargarVotoExistente();
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant VoteForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final nuevo = widget.votoInicial;
+    final anterior = oldWidget.votoInicial;
+    final cambioExterno =
+        nuevo != null &&
+        (anterior == null ||
+            anterior.posicion != nuevo.posicion ||
+            anterior.comentario != nuevo.comentario);
+    if (cambioExterno) {
+      _aplicarVoto(nuevo);
+    }
+  }
+
+  void _aplicarVoto(Voto voto) {
+    votoExistente = voto;
+    posicionSeleccionada = voto.posicion;
+    comentarioController.text = voto.comentario;
+  }
+
+  /// Sincroniza comentario y/o posición con el padre (permite solo comentario o solo voto).
+  void _notificarCambio() {
+    if (widget.onVoteChanged == null || widget.cataCerrada) return;
+    final comentario = comentarioController.text.trim();
+    final tienePosicion = posicionSeleccionada != null;
+    final tieneComentario = comentario.isNotEmpty;
+    if (!tienePosicion && !tieneComentario) {
+      widget.onVoteChanged!(null);
+      return;
+    }
+    widget.onVoteChanged!(
+      Voto(
+        usuarioId: widget.userId,
+        posicion: posicionSeleccionada,
+        comentario: comentario,
+        esSistemaAntiguo: false,
+      ),
+    );
   }
 
   Future<void> _cargarVotoExistente() async {
@@ -52,11 +103,17 @@ class _VoteFormState extends State<VoteForm> {
       final miVoto = votos[widget.userId];
 
       if (miVoto != null) {
+        if (!mounted) return;
         setState(() {
           votoExistente = miVoto;
           posicionSeleccionada = miVoto.posicion;
           comentarioController.text = miVoto.comentario;
         });
+        if (widget.onVoteChanged != null && !widget.cataCerrada) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) widget.onVoteChanged!(miVoto);
+          });
+        }
       }
     } catch (e) {
       print('Error cargando voto existente: $e');
@@ -65,6 +122,7 @@ class _VoteFormState extends State<VoteForm> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     return Card(
       color: Colors.white,
       margin: const EdgeInsets.only(bottom: 16),
@@ -140,7 +198,7 @@ class _VoteFormState extends State<VoteForm> {
                 final posicion = index + 1;
                 return DropdownMenuItem<int>(
                   value: posicion,
-                  child: Text('$posicionº lugar'),
+                  child: Text('$posicionº posición'),
                 );
               }),
               onChanged: widget.cataCerrada
@@ -149,21 +207,7 @@ class _VoteFormState extends State<VoteForm> {
                       setState(() {
                         posicionSeleccionada = value;
                       });
-
-                      // Notificar cambio al padre
-                      if (widget.onVoteChanged != null) {
-                        if (value != null) {
-                          final voto = Voto(
-                            usuarioId: widget.userId,
-                            posicion: value,
-                            comentario: comentarioController.text.trim(),
-                            esSistemaAntiguo: false,
-                          );
-                          widget.onVoteChanged!(voto);
-                        } else {
-                          widget.onVoteChanged!(null);
-                        }
-                      }
+                      _notificarCambio();
                     },
             ),
             const SizedBox(height: 16),
@@ -173,21 +217,7 @@ class _VoteFormState extends State<VoteForm> {
               controller: comentarioController,
               maxLines: 2,
               enabled: !widget.cataCerrada,
-              onChanged: widget.cataCerrada
-                  ? null
-                  : (value) {
-                      // Actualizar voto si ya hay posición seleccionada
-                      if (posicionSeleccionada != null &&
-                          widget.onVoteChanged != null) {
-                        final voto = Voto(
-                          usuarioId: widget.userId,
-                          posicion: posicionSeleccionada!,
-                          comentario: value.trim(),
-                          esSistemaAntiguo: false,
-                        );
-                        widget.onVoteChanged!(voto);
-                      }
-                    },
+              onChanged: widget.cataCerrada ? null : (_) => _notificarCambio(),
               decoration: InputDecoration(
                 labelText: 'Comentario (opcional)',
                 border: OutlineInputBorder(
@@ -270,8 +300,10 @@ class _VoteFormState extends State<VoteForm> {
   String _getIndicadorTexto() {
     if (votoExistente != null &&
         votoExistente!.posicion != posicionSeleccionada) {
-      return 'Cambio: ${votoExistente!.posicion}º → ${posicionSeleccionada}º lugar';
+      final antes = votoExistente!.posicion;
+      final antesStr = antes != null ? '$antesº' : 'sin posición';
+      return 'Cambio: $antesStr → $posicionSeleccionadaº posición';
     }
-    return 'Posición asignada: ${posicionSeleccionada}º lugar';
+    return 'Posición asignada: $posicionSeleccionadaº posición';
   }
 }
