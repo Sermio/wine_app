@@ -338,7 +338,9 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
                   16,
                   16,
                   16,
-                  cataCerrada ? 16 : (tecladoAbierto ? 24 : 148 + bottomInset),
+                  tecladoAbierto
+                      ? 24
+                      : (cataCerrada ? 100 + bottomInset : 148 + bottomInset),
                 ),
                 itemCount:
                     elementos.length +
@@ -411,8 +413,8 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
             },
           ),
 
-          // Barra inferior de acciones fija (solo si la cata no está cerrada)
-          if (!cataCerrada && !tecladoAbierto)
+          // Barra inferior: cata abierta → Resultados + Guardar; cata cerrada → solo Resultados
+          if (!tecladoAbierto)
             Positioned(
               bottom: 16 + bottomInset,
               left: 16,
@@ -429,71 +431,96 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
                     ),
                   ],
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  ResultadosScreen(votacionId: widget.cata.id),
+                child: cataCerrada
+                    ? SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ResultadosScreen(votacionId: widget.cata.id),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.bar_chart),
+                          label: const Text('Ver resultados'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: primaryColor,
+                            side: const BorderSide(color: primaryColor),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                          );
-                        },
-                        icon: const Icon(Icons.bar_chart),
-                        label: const Text('Resultados'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: primaryColor,
-                          side: const BorderSide(color: primaryColor),
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton.icon(
-                        onPressed: _isEnviando
-                            ? null
-                            : () {
-                                _enviarTodasLasVotaciones(context);
+                      )
+                    : Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => ResultadosScreen(
+                                      votacionId: widget.cata.id,
+                                    ),
+                                  ),
+                                );
                               },
-                        icon: _isEnviando
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
+                              icon: const Icon(Icons.bar_chart),
+                              label: const Text('Resultados'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: primaryColor,
+                                side: const BorderSide(color: primaryColor),
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                              )
-                            : const Icon(Icons.save, color: Colors.white),
-                        label: Text(
-                          _isEnviando
-                              ? 'Guardando...'
-                              : 'Guardar (${_votosPendientes.length})',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
+                              ),
+                            ),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            flex: 2,
+                            child: ElevatedButton.icon(
+                              onPressed: _isEnviando
+                                  ? null
+                                  : () {
+                                      _enviarTodasLasVotaciones(context);
+                                    },
+                              icon: _isEnviando
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save, color: Colors.white),
+                              label: Text(
+                                _isEnviando
+                                    ? 'Guardando...'
+                                    : 'Guardar (${_votosPendientes.length})',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: primaryColor,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                  ],
-                ),
               ),
             ),
         ],
