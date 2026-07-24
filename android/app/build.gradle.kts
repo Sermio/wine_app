@@ -17,7 +17,7 @@ if (keystorePropertiesFile.exists()) {
 
 android {
     namespace = "com.smt.wine_app"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -32,9 +32,9 @@ android {
     defaultConfig {
         applicationId = "com.smt.wine_app"
         minSdk = 23
-        targetSdk = flutter.targetSdkVersion
-        versionCode = 9
-        versionName = "1.0.7"
+        targetSdk = 36
+        versionCode = 10
+        versionName = "1.0.8"
     }
 
     signingConfigs {
