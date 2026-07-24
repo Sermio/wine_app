@@ -21,6 +21,7 @@ class FirestoreService extends ChangeNotifier {
   }
 
   Future<void> deleteCata(String id) async {
+    final batch = _db.batch();
     final cataRef = _db.collection('catas').doc(id);
 
     final elementos = await cataRef.collection('elementos').get();
@@ -40,15 +41,17 @@ class FirestoreService extends ChangeNotifier {
       // Eliminar votos del elemento
       final votos = await elemento.reference.collection('votos').get();
       for (var voto in votos.docs) {
-        await voto.reference.delete();
+        batch.delete(voto.reference);
       }
 
       // Eliminar el documento del elemento
-      await elemento.reference.delete();
+      batch.delete(elemento.reference);
     }
 
     // Eliminar el documento de la cata
-    await cataRef.delete();
+    batch.delete(cataRef);
+    
+    await batch.commit();
     notifyListeners();
   }
 
@@ -62,6 +65,13 @@ class FirestoreService extends ChangeNotifier {
       return Cata.fromJson(doc.id, doc.data()!);
     }
     return null;
+  }
+
+  Future<void> toggleEstadoCata(String cataId, bool estadoAbierta) async {
+    await _db.collection('catas').doc(cataId).update({
+      'abierta': estadoAbierta,
+    });
+    notifyListeners();
   }
 
   Future<List<ElementoCata>> fetchElementosDeCata(String cataId) async {
@@ -150,20 +160,21 @@ class FirestoreService extends ChangeNotifier {
         throw Exception('Todos los elementos deben tener un ID definido');
     }
 
+    final batch = _db.batch();
     final cataRef = _db.collection('catas').doc(cata.id);
-    await cataRef.set({
+    
+    batch.set(cataRef, {
       'nombre': cata.nombre,
       'fecha': cata.fecha.toIso8601String(),
       'creadorId': cata.creadorId,
     });
 
     for (var elemento in cata.elementos) {
-      await cataRef
-          .collection('elementos')
-          .doc(elemento.id)
-          .set(elemento.toJson());
+      final elementoRef = cataRef.collection('elementos').doc(elemento.id);
+      batch.set(elementoRef, elemento.toJson());
     }
 
+    await batch.commit();
     notifyListeners();
   }
 
@@ -171,9 +182,10 @@ class FirestoreService extends ChangeNotifier {
     Cata cata, {
     required List<String> elementosAEliminar,
   }) async {
+    final batch = _db.batch();
     final cataRef = _db.collection('catas').doc(cata.id);
 
-    await cataRef.update({
+    batch.update(cataRef, {
       'nombre': cata.nombre,
       'fecha': cata.fecha.toIso8601String(),
       'creadorId': cata.creadorId,
@@ -197,20 +209,45 @@ class FirestoreService extends ChangeNotifier {
 
         final votos = await elementoRef.collection('votos').get();
         for (final voto in votos.docs) {
-          await voto.reference.delete();
+          batch.delete(voto.reference);
         }
       }
 
-      await elementoRef.delete();
+      batch.delete(elementoRef);
     }
 
     for (final elemento in cata.elementos) {
-      await cataRef
-          .collection('elementos')
-          .doc(elemento.id)
-          .set(elemento.toJson(), SetOptions(merge: true));
+      final elementoRef = cataRef.collection('elementos').doc(elemento.id);
+      batch.set(elementoRef, elemento.toJson(), SetOptions(merge: true));
     }
 
+    await batch.commit();
+    notifyListeners();
+  }
+
+  Future<void> saveVotosBatch(
+    String cataId,
+    String userId,
+    Map<String, Voto> votos,
+  ) async {
+    final batch = _db.batch();
+    
+    for (final entry in votos.entries) {
+      final elementoId = entry.key;
+      final voto = entry.value;
+      
+      final votoRef = _db
+          .collection('catas')
+          .doc(cataId)
+          .collection('elementos')
+          .doc(elementoId)
+          .collection('votos')
+          .doc(userId);
+          
+      batch.set(votoRef, voto.toJson());
+    }
+    
+    await batch.commit();
     notifyListeners();
   }
 

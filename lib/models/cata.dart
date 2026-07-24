@@ -6,6 +6,7 @@ class Cata {
   final DateTime fecha;
   final String creadorId;
   final List<ElementoCata> elementos;
+  final bool? abierta;
 
   Cata({
     required this.id,
@@ -13,6 +14,7 @@ class Cata {
     required this.fecha,
     required this.creadorId,
     required this.elementos,
+    this.abierta,
   });
 
   Map<String, dynamic> toJson() => {
@@ -21,6 +23,7 @@ class Cata {
     'fecha': fecha.toIso8601String(),
     'creadorId': creadorId,
     'elementos': elementos.map((e) => e.toJson()).toList(),
+    if (abierta != null) 'abierta': abierta,
   };
 
   static Cata fromJson(String id, Map<String, dynamic> json) {
@@ -30,6 +33,7 @@ class Cata {
       fecha: DateTime.parse(json['fecha']),
       creadorId: json['creadorId'],
       elementos: [],
+      abierta: json['abierta'],
     );
   }
 }

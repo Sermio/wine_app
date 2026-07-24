@@ -33,6 +33,11 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
+              leading: Icon(cata.abierta != false ? Icons.lock_outline : Icons.lock_open),
+              title: Text(cata.abierta != false ? 'Cerrar cata' : 'Abrir cata'),
+              onTap: () => Navigator.of(ctx).pop('toggle_estado'),
+            ),
+            ListTile(
               leading: const Icon(Icons.edit),
               title: const Text('Editar cata'),
               onTap: () => Navigator.of(ctx).pop('editar'),
@@ -53,6 +58,13 @@ class _HomeScreenState extends State<HomeScreen> {
       await Navigator.of(
         context,
       ).push(MaterialPageRoute(builder: (_) => CreateCataScreen(cata: cata)));
+      return;
+    }
+
+    if (accion == 'toggle_estado') {
+      if (!context.mounted) return;
+      final bool nuevoEstado = !(cata.abierta ?? true);
+      await firestore.toggleEstadoCata(cata.id, nuevoEstado);
       return;
     }
 
@@ -121,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Catas', style: appBarTitleStyle),
+        title: Text('Catas', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
@@ -167,12 +179,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: catas.length,
                   itemBuilder: (context, index) {
                     final cata = catas[index];
-                    final fechaCata = DateTime(
-                      cata.fecha.year,
-                      cata.fecha.month,
-                      cata.fecha.day,
-                    );
-                    final esPasada = fechaCata.isBefore(hoy);
+                    bool esPasada;
+                    if (cata.abierta != null) {
+                      esPasada = !cata.abierta!;
+                    } else {
+                      final fechaCata = DateTime(
+                        cata.fecha.year,
+                        cata.fecha.month,
+                        cata.fecha.day,
+                      );
+                      esPasada = fechaCata.isBefore(hoy);
+                    }
 
                     return Card(
                       elevation: 4,

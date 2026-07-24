@@ -291,6 +291,7 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                               fecha: _fecha!,
                               creadorId: widget.cata!.creadorId,
                               elementos: elementos,
+                              abierta: widget.cata!.abierta,
                             );
 
                             await firestore.updateVotacion(
@@ -305,6 +306,7 @@ class _CreateCataScreenState extends State<CreateCataScreen> {
                               fecha: _fecha!,
                               creadorId: creador,
                               elementos: elementos,
+                              abierta: true,
                             );
 
                             await firestore.addVotacion(nuevaCata);

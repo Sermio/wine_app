@@ -83,7 +83,7 @@ class _ResultadosScreenState extends State<ResultadosScreen> {
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Resultados', style: appBarTitleStyle),
+        title: Text('Resultados', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
