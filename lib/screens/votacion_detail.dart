@@ -83,17 +83,20 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
           ..addAll(restaurados);
         _detectarPosicionesRepetidas();
       });
-    } catch (_) {
-      // Si el borrador está corrupto, lo ignoramos sin bloquear la pantalla.
+    } catch (e) {
+      print('Borrador corrupto detectado, eliminándolo: $e');
+      await _limpiarBorradorLocal();
     }
   }
 
   void _enviarTodasLasVotaciones(BuildContext context) async {
     if (_votosPendientes.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No hay votaciones para enviar'),
+        SnackBar(
+          content: const Text('No hay votaciones para enviar'),
           backgroundColor: Colors.orange,
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(bottom: 80 + MediaQuery.of(context).padding.bottom, left: 16, right: 16),
         ),
       );
       return;
@@ -109,10 +112,12 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
 
     if (posiciones.length != posicionesUnicas.length) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Hay posiciones repetidas'),
+        SnackBar(
+          content: const Text('Hay posiciones repetidas'),
           backgroundColor: Colors.red,
-          duration: Duration(seconds: 5),
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          margin: EdgeInsets.only(bottom: 80 + MediaQuery.of(context).padding.bottom, left: 16, right: 16),
         ),
       );
       return;
@@ -125,18 +130,12 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
       final auth = Provider.of<AuthService>(context, listen: false);
       final userId = auth.currentUser!.uid;
 
-      // Enviar todas las votaciones
-      for (var entry in _votosPendientes.entries) {
-        final elementoId = entry.key;
-        final voto = entry.value;
-
-        await firestore.addOrUpdateVoto(
-          widget.cata.id,
-          elementoId,
-          userId,
-          voto,
-        );
-      }
+      // Enviar todas las votaciones en batch
+      await firestore.saveVotosBatch(
+        widget.cata.id,
+        userId,
+        _votosPendientes,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -147,6 +146,8 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
                   : 'Todas las votaciones han sido enviadas correctamente',
             ),
             backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(bottom: 80 + MediaQuery.of(context).padding.bottom, left: 16, right: 16),
           ),
         );
 
@@ -163,6 +164,8 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
           SnackBar(
             content: Text('Error al enviar votaciones: $e'),
             backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(bottom: 80 + MediaQuery.of(context).padding.bottom, left: 16, right: 16),
           ),
         );
       }
@@ -222,11 +225,14 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
       final elementos = await firestore.fetchElementosDeCata(widget.cata.id);
       bool hayVotos = false;
 
-      for (var elemento in elementos) {
-        final votos = await firestore.fetchVotosDeElemento(
-          widget.cata.id,
-          elemento.id,
-        );
+      final futures = elementos.map((elemento) => firestore.fetchVotosDeElemento(
+        widget.cata.id,
+        elemento.id,
+      ));
+      
+      final resultados = await Future.wait(futures);
+      
+      for (final votos in resultados) {
         if (votos.containsKey(userId)) {
           hayVotos = true;
           break;
@@ -294,23 +300,28 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
     final tecladoAbierto = keyboardInset > 0;
 
     // Verificar si la cata está cerrada
-    final ahora = DateTime.now();
-    final fechaCata = widget.cata.fecha;
-    // La cata está cerrada si la fecha actual es posterior al final del día de la cata
-    final finDelDiaCata = DateTime(
-      fechaCata.year,
-      fechaCata.month,
-      fechaCata.day,
-      23,
-      59,
-      59,
-    );
-    final cataCerrada = ahora.isAfter(finDelDiaCata);
+    bool cataCerrada;
+    if (widget.cata.abierta != null) {
+      cataCerrada = !widget.cata.abierta!; // Prioridad al nuevo flag
+    } else {
+      // Retrocompatibilidad para catas antiguas
+      final ahora = DateTime.now();
+      final fechaCata = widget.cata.fecha;
+      final finDelDiaCata = DateTime(
+        fechaCata.year,
+        fechaCata.month,
+        fechaCata.day,
+        23,
+        59,
+        59,
+      );
+      cataCerrada = ahora.isAfter(finDelDiaCata);
+    }
 
     return Scaffold(
       backgroundColor: backgroundColor,
       appBar: AppBar(
-        title: const Text('Votaciones', style: appBarTitleStyle),
+        title: Text('Votaciones', style: appBarTitleStyle),
         centerTitle: true,
         backgroundColor: primaryColor,
         foregroundColor: Colors.white,
@@ -332,6 +343,17 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
                 (a, b) => a.nombreAuxiliar.compareTo(b.nombreAuxiliar),
               );
               final userId = auth.currentUser!.uid;
+
+              final posicionesOcupadas = <int, String>{};
+              for (final entry in _votosPendientes.entries) {
+                if (entry.value.posicion != null) {
+                  final e = elementos.firstWhere(
+                    (e) => e.id == entry.key,
+                    orElse: () => elementos.first,
+                  );
+                  posicionesOcupadas[entry.value.posicion!] = e.nombreAuxiliar;
+                }
+              }
 
               return ListView.builder(
                 padding: EdgeInsets.fromLTRB(
@@ -401,6 +423,7 @@ class _VotacionDetailScreenState extends State<VotacionDetailScreen>
                     cataCerrada: cataCerrada,
                     tienePosicionRepetida: _elementosConPosicionesRepetidas
                         .contains(elemento.id),
+                    posicionesOcupadas: posicionesOcupadas,
                     onVoteChanged: cataCerrada
                         ? null
                         : (voto) {

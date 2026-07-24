@@ -13,6 +13,7 @@ class VoteForm extends StatefulWidget {
   final Function(Voto?)? onVoteChanged;
   final bool cataCerrada;
   final bool tienePosicionRepetida;
+  final Map<int, String> posicionesOcupadas;
 
   const VoteForm({
     super.key,
@@ -25,6 +26,7 @@ class VoteForm extends StatefulWidget {
     this.onVoteChanged,
     this.cataCerrada = false,
     this.tienePosicionRepetida = false,
+    this.posicionesOcupadas = const {},
   });
 
   @override
@@ -196,9 +198,26 @@ class _VoteFormState extends State<VoteForm>
               ),
               items: List.generate(widget.totalElementos, (index) {
                 final posicion = index + 1;
+                final elementoOcupante = widget.posicionesOcupadas[posicion];
+                
+                String texto = '$posicionº posición';
+                if (elementoOcupante != null && elementoOcupante != widget.elemento.nombreAuxiliar) {
+                  texto += ' ($elementoOcupante)';
+                }
+                
                 return DropdownMenuItem<int>(
                   value: posicion,
-                  child: Text('$posicionº posición'),
+                  child: Text(
+                    texto,
+                    style: TextStyle(
+                      color: (elementoOcupante != null && elementoOcupante != widget.elemento.nombreAuxiliar) 
+                          ? Colors.orange[800] 
+                          : null,
+                      fontStyle: (elementoOcupante != null && elementoOcupante != widget.elemento.nombreAuxiliar) 
+                          ? FontStyle.italic 
+                          : null,
+                    ),
+                  ),
                 );
               }),
               onChanged: widget.cataCerrada

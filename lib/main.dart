@@ -8,6 +8,8 @@ import 'package:wine_app/screens/login.dart';
 import 'package:wine_app/services/auth_service.dart';
 import 'package:wine_app/services/firestore_service.dart';
 
+import 'package:wine_app/utils/styles.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
@@ -27,6 +29,58 @@ class MyApp extends StatelessWidget {
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Cata',
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: primaryColor,
+            primary: primaryColor,
+            secondary: secondaryColor,
+            surface: backgroundColor,
+            error: errorColor,
+          ),
+          useMaterial3: true,
+          scaffoldBackgroundColor: backgroundColor,
+          cardTheme: CardThemeData(
+            color: cardBackgroundColor,
+            elevation: elevationL,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(radiusM),
+            ),
+          ),
+          appBarTheme: AppBarTheme(
+            backgroundColor: primaryColor,
+            foregroundColor: Colors.white,
+            elevation: 0,
+            centerTitle: true,
+            titleTextStyle: appBarTitleStyle,
+          ),
+          elevatedButtonTheme: ElevatedButtonThemeData(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: primaryColor,
+              foregroundColor: Colors.white,
+              textStyle: buttonTextStyle,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(radiusM),
+              ),
+              padding: const EdgeInsets.symmetric(vertical: spacingM, horizontal: spacingL),
+            ),
+          ),
+          inputDecorationTheme: InputDecorationTheme(
+            filled: true,
+            fillColor: surfaceColor,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radiusS),
+              borderSide: const BorderSide(color: dividerColor),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radiusS),
+              borderSide: const BorderSide(color: dividerColor),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(radiusS),
+              borderSide: const BorderSide(color: primaryColor, width: 2),
+            ),
+          ),
+        ),
         home: StreamBuilder(
           stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
